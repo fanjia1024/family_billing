@@ -14,6 +14,7 @@
 ## 技术栈
 
 ### 前端
+
 - Vue 3 + TypeScript
 - Vite
 - Pinia (状态管理)
@@ -22,6 +23,7 @@
 - ECharts (数据可视化)
 
 ### 后端
+
 - Rust
 - Tauri 2.0
 - SQLite (本地数据库)
@@ -32,6 +34,38 @@
 - Node.js 18+
 - Rust 1.70+
 - Tauri CLI 2.0+
+- Tesseract OCR (用于账单截图识别)
+
+### 安装 Tesseract OCR
+
+OCR 功能需要安装 Tesseract 及中文语言包：
+
+**macOS:**
+
+```bash
+brew install tesseract
+brew install tesseract-lang  # 安装所有语言包（包含中文）
+```
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt-get install tesseract-ocr
+sudo apt-get install tesseract-ocr-chi-sim  # 中文简体
+```
+
+**Windows:**
+
+1. 从 [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki) 下载安装程序
+2. 安装时勾选 "Chinese Simplified" 语言包
+3. 将 Tesseract 安装目录添加到系统 PATH 环境变量
+
+验证安装：
+
+```bash
+tesseract --version
+tesseract --list-langs  # 应包含 chi_sim
+```
 
 ## 安装依赖
 
@@ -97,9 +131,10 @@ Household_Billing_Expense_Management_System/
 
 ## 注意事项
 
-1. OCR 功能目前为占位实现，需要集成实际的 OCR 引擎（如 Tesseract）
+1. OCR 功能使用本地 Tesseract 引擎，需要先安装 Tesseract 和中文语言包
 2. 数据存储在应用数据目录的 SQLite 数据库中
 3. 移动端构建需要配置相应的开发环境（Android SDK、Xcode 等）
+4. 账单截图识别支持微信/支付宝常见格式，识别准确率取决于图片质量
 
 ## 许可证
 

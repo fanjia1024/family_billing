@@ -14,6 +14,24 @@ pub struct OcrResult {
     pub raw_text: String,
 }
 
+/// 单个账单项
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OcrBillItem {
+    pub category: String,
+    pub amount: f64,
+    pub percentage: Option<f64>,
+    pub bill_type: String,  // income 或 expense
+}
+
+/// 批量 OCR 识别结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OcrBatchResult {
+    pub items: Vec<OcrBillItem>,
+    pub total_amount: f64,
+    pub bill_date: String,
+    pub raw_text: String,
+}
+
 #[tauri::command]
 pub fn ocr_recognize(_app: AppHandle, image_path: String) -> Result<OcrResult, String> {
     info!("[ocr_recognize] 开始OCR识别: image_path={}", image_path);
@@ -43,6 +61,47 @@ pub fn ocr_recognize(_app: AppHandle, image_path: String) -> Result<OcrResult, S
         r#type: result.r#type,
         amount: result.amount,
         description: result.description,
+        bill_date: result.bill_date,
+        raw_text: result.raw_text,
+    })
+}
+
+/// 批量OCR识别，返回多条账单
+#[tauri::command]
+pub fn ocr_recognize_batch(_app: AppHandle, image_path: String) -> Result<OcrBatchResult, String> {
+    info!("[ocr_recognize_batch] 开始批量OCR识别: image_path={}", image_path);
+    
+    if image_path.is_empty() {
+        warn!("[ocr_recognize_batch] 图片路径为空");
+        return Err("图片路径不能为空".to_string());
+    }
+    
+    // 检查文件是否存在
+    if !std::path::Path::new(&image_path).exists() {
+        error!("[ocr_recognize_batch] 图片文件不存在: {}", image_path);
+        return Err("图片文件不存在".to_string());
+    }
+    
+    debug!("[ocr_recognize_batch] 调用OCR服务识别多条账单");
+    let result = ocr_service::recognize_bill_details(&image_path).map_err(|e| {
+        error!("[ocr_recognize_batch] OCR批量识别失败: {}", e);
+        format!("OCR识别失败: {}", e)
+    })?;
+
+    let items: Vec<OcrBillItem> = result.items.iter().map(|item| OcrBillItem {
+        category: item.category.clone(),
+        amount: item.amount,
+        percentage: item.percentage,
+        bill_type: item.bill_type.clone(),
+    }).collect();
+
+    info!("[ocr_recognize_batch] OCR批量识别成功: {} 条账单, 总金额={}, 日期={}", 
+        items.len(), result.total_amount, result.bill_date);
+    debug!("[ocr_recognize_batch] 原始文本长度: {} 字符", result.raw_text.len());
+
+    Ok(OcrBatchResult {
+        items,
+        total_amount: result.total_amount,
         bill_date: result.bill_date,
         raw_text: result.raw_text,
     })

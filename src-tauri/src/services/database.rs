@@ -1,34 +1,32 @@
+use anyhow::{Context, Result as AnyhowResult};
+use log::{debug, info};
 use rusqlite::{Connection, Result};
 use tauri::{AppHandle, Manager};
-use anyhow::{Context, Result as AnyhowResult};
-use log::{info, debug};
 
 const DB_NAME: &str = "household_billing.db";
 
 pub fn init_database(app: &AppHandle) -> AnyhowResult<()> {
     info!("[init_database] 开始初始化数据库");
-    
+
     let app_data_dir = app
         .path()
         .app_data_dir()
         .context("Failed to get app data directory")?;
-    
+
     debug!("[init_database] 应用数据目录: {:?}", app_data_dir);
-    
-    std::fs::create_dir_all(&app_data_dir)
-        .context("Failed to create app data directory")?;
-    
+
+    std::fs::create_dir_all(&app_data_dir).context("Failed to create app data directory")?;
+
     let db_path = app_data_dir.join(DB_NAME);
     debug!("[init_database] 数据库路径: {:?}", db_path);
-    
-    let conn = Connection::open(&db_path)
-        .context("Failed to open database connection")?;
-    
+
+    let conn = Connection::open(&db_path).context("Failed to open database connection")?;
+
     info!("[init_database] 数据库连接成功");
-    
+
     create_tables(&conn)?;
     init_default_data(&conn)?;
-    
+
     info!("[init_database] 数据库初始化完成");
     Ok(())
 }
@@ -38,13 +36,13 @@ pub fn get_db_path(app: &AppHandle) -> AnyhowResult<std::path::PathBuf> {
         .path()
         .app_data_dir()
         .context("Failed to get app data directory")?;
-    
+
     Ok(app_data_dir.join(DB_NAME))
 }
 
 fn create_tables(conn: &Connection) -> Result<()> {
     info!("[create_tables] 开始创建数据库表");
-    
+
     // Family table
     debug!("[create_tables] 创建 family 表");
     conn.execute(
@@ -137,64 +135,96 @@ fn create_tables(conn: &Connection) -> Result<()> {
 }
 
 fn init_default_data(conn: &Connection) -> Result<()> {
-    debug!("[init_default_data] 检查是否需要初始化默认数据");
-    
-    // Check if default categories exist
-    let mut stmt = conn.prepare("SELECT COUNT(*) FROM category")?;
-    let count: i32 = stmt.query_row([], |row| row.get(0))?;
-    
-    if count == 0 {
-        info!("[init_default_data] 初始化默认分类数据");
-        
-        // Insert default expense categories
-        let expense_categories = vec![
-            ("餐饮", "expense", "🍽️"),
-            ("交通", "expense", "🚗"),
-            ("购物", "expense", "🛒"),
-            ("娱乐", "expense", "🎮"),
-            ("医疗", "expense", "🏥"),
-            ("教育", "expense", "📚"),
-            ("住房", "expense", "🏠"),
-            ("其他支出", "expense", "📝"),
-        ];
-        
-        for (name, type_, icon) in &expense_categories {
+    info!("[init_default_data] 开始初始化分类数据");
+
+    // 定义所有需要初始化的分类
+    // 支出分类（消费场景，适用于微信和支付宝）
+    let expense_scene_categories = vec![
+        ("餐饮美食", "expense", "🍽️"),
+        ("交通出行", "expense", "🚗"),
+        ("购物消费", "expense", "🛒"),
+        ("生活服务", "expense", "💇"),
+        ("充值缴费", "expense", "📱"),
+        ("医疗健康", "expense", "🏥"),
+        ("旅行住宿", "expense", "✈️"),
+        ("爱车养车", "expense", "🚙"),
+        ("母婴亲子", "expense", "👶"),
+        ("教育培训", "expense", "📚"),
+        ("娱乐休闲", "expense", "🎮"),
+        ("住房物业", "expense", "🏠"),
+        ("通讯物流", "expense", "📦"),
+        ("运动健康", "expense", "🏃"),
+        ("其他支出", "expense", "📝"),
+    ];
+
+    // 收入分类（交易类型）
+    let income_categories = vec![
+        ("工资", "income", "💰"),
+        ("奖金", "income", "🎁"),
+        ("转账收入", "income", "💸"),
+        ("红包收入", "income", "🧧"),
+        ("退款收入", "income", "↩️"),
+        ("投资收益", "income", "📈"),
+        ("理财收益", "income", "💳"),
+        ("其他收入", "income", "📝"),
+    ];
+
+    // 支出分类（交易类型）
+    let expense_transaction_categories = vec![
+        ("转账支出", "expense", "💸"),
+        ("红包支出", "expense", "🧧"),
+        ("商户消费", "expense", "🏪"),
+        ("群收款", "expense", "📨"),
+        ("信用卡还款", "expense", "💳"),
+        ("生活缴费", "expense", "💡"),
+        ("充值提现", "expense", "💰"),
+        ("金融理财", "expense", "📊"),
+    ];
+
+    // 合并所有分类
+    let all_categories: Vec<(&str, &str, &str)> = expense_scene_categories
+        .iter()
+        .chain(income_categories.iter())
+        .chain(expense_transaction_categories.iter())
+        .cloned()
+        .collect();
+
+    // 准备检查分类是否存在的语句
+    let mut check_stmt =
+        conn.prepare("SELECT COUNT(*) FROM category WHERE name = ?1 AND type = ?2")?;
+
+    let mut added_count = 0;
+    let mut skipped_count = 0;
+
+    // 遍历所有分类，只添加不存在的
+    for (name, type_, icon) in &all_categories {
+        let exists: i32 = check_stmt.query_row([*name, *type_], |row| row.get(0))?;
+
+        if exists == 0 {
             conn.execute(
                 "INSERT INTO category (name, type, icon) VALUES (?1, ?2, ?3)",
                 [*name, *type_, *icon],
             )?;
-            debug!("[init_default_data] 添加支出分类: {}", name);
+            debug!("[init_default_data] 添加分类: {} ({})", name, type_);
+            added_count += 1;
+        } else {
+            debug!("[init_default_data] 分类已存在，跳过: {} ({})", name, type_);
+            skipped_count += 1;
         }
-        
-        // Insert default income categories
-        let income_categories = vec![
-            ("工资", "income", "💰"),
-            ("奖金", "income", "🎁"),
-            ("投资", "income", "📈"),
-            ("转账", "income", "💸"),
-            ("其他收入", "income", "📝"),
-        ];
-        
-        for (name, type_, icon) in &income_categories {
-            conn.execute(
-                "INSERT INTO category (name, type, icon) VALUES (?1, ?2, ?3)",
-                [*name, *type_, *icon],
-            )?;
-            debug!("[init_default_data] 添加收入分类: {}", name);
-        }
-        
-        info!("[init_default_data] 默认分类数据初始化完成 (支出: {}, 收入: {})", 
-            expense_categories.len(), income_categories.len());
-    } else {
-        debug!("[init_default_data] 分类数据已存在 ({} 条)，跳过初始化", count);
     }
-    
+
+    info!(
+        "[init_default_data] 分类数据初始化完成 (新增: {}, 已存在: {}, 总计: {})",
+        added_count,
+        skipped_count,
+        all_categories.len()
+    );
+
     Ok(())
 }
 
 pub fn get_connection(app: &AppHandle) -> AnyhowResult<Connection> {
     let db_path = get_db_path(app)?;
     debug!("[get_connection] 打开数据库连接: {:?}", db_path);
-    Connection::open(&db_path)
-        .context("Failed to open database connection")
+    Connection::open(&db_path).context("Failed to open database connection")
 }

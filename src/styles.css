@@ -176,8 +176,8 @@ input, textarea, select {
   
   .chart-item {
     width: 100%;
-  }
-  
+}
+
   .chart-item div {
     height: 300px !important;
   }
@@ -211,7 +211,7 @@ input, textarea, select {
     --background-color: #1a1a1a;
     --card-background: #2a2a2a;
   }
-  
+
   body {
     background-color: var(--background-color);
     color: var(--text-color);

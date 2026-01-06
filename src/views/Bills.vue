@@ -119,9 +119,9 @@
     <van-dialog
       v-model:show="showOcrDialog"
       title="OCR识别账单"
-      show-cancel-button
-      @confirm="handleConfirmOcrBill"
-      @cancel="resetOcrDialog"
+      :show-confirm-button="false"
+      :show-cancel-button="false"
+      class="ocr-dialog"
     >
       <div class="ocr-upload-section">
         <van-uploader
@@ -130,47 +130,119 @@
           accept="image/*"
           :max-count="1"
         />
-        <p class="ocr-tip">支持微信、支付宝账单截图</p>
+        <p class="ocr-tip">支持微信、支付宝账单截图（可识别多条账单）</p>
       </div>
-      <div v-if="ocrResult" class="ocr-result">
-        <h3>识别结果</h3>
-        <van-cell-group inset>
+      
+      <!-- 多条账单识别结果 -->
+      <div v-if="ocrBatchResult && ocrBatchResult.items.length > 0" class="ocr-batch-result">
+        <!-- 成员选择 -->
+        <div class="ocr-member-select">
           <van-field
-            v-model.number="ocrResult.amount"
-            label="金额"
-            type="number"
-            placeholder="识别金额"
-          />
-          <van-field
-            v-model="ocrResult.type"
-            label="类型"
-            placeholder="选择类型"
+            v-model="ocrMemberDisplayName"
+            label="记账成员"
+            placeholder="选择成员"
             is-link
             readonly
-            @click="showOcrTypePicker = true"
+            @click="showOcrMemberPicker = true"
           />
-          <van-field
-            v-model="ocrResult.bill_date"
-            label="日期"
-            placeholder="选择日期"
-            is-link
-            readonly
-            @click="showOcrDatePicker = true"
-          />
-          <van-field
-            v-model="ocrResult.description"
-            label="描述"
-            placeholder="账单描述"
-            type="textarea"
-            rows="2"
-          />
-        </van-cell-group>
-        <div class="ocr-raw-text" v-if="ocrResult.raw_text">
-          <p><strong>原始文本:</strong></p>
-          <p class="raw-text">{{ ocrResult.raw_text }}</p>
+        </div>
+        
+        <div class="ocr-header">
+          <h3>识别结果 ({{ ocrBatchResult.items.length }}条)</h3>
+          <van-checkbox v-model="selectAllOcr" @change="toggleSelectAll">全选</van-checkbox>
+        </div>
+        
+        <div class="ocr-items-list">
+          <div 
+            v-for="(item, index) in ocrBatchResult.items" 
+            :key="index"
+            class="ocr-item"
+          >
+            <van-checkbox v-model="ocrItemSelections[index]" class="item-checkbox" />
+            <div class="item-content">
+              <van-field
+                v-model="item.category"
+                label="分类"
+                placeholder="选择分类"
+                is-link
+                readonly
+                @click="openOcrCategoryPicker(index)"
+              />
+              <van-field
+                v-model.number="item.amount"
+                label="金额"
+                type="number"
+                placeholder="金额"
+              />
+              <van-field
+                v-model="ocrItemSources[index]"
+                label="来源"
+                placeholder="选择来源"
+                is-link
+                readonly
+                @click="openOcrSourcePicker(index)"
+              />
+            </div>
+          </div>
+        </div>
+        
+        <div class="ocr-summary">
+          <p>日期: {{ ocrBatchResult.bill_date }}</p>
+          <p>总金额: ¥{{ ocrBatchResult.total_amount.toFixed(2) }}</p>
+        </div>
+        
+        <div class="ocr-raw-text" v-if="ocrBatchResult.raw_text">
+          <van-collapse v-model="rawTextCollapse">
+            <van-collapse-item title="原始文本" name="1">
+              <p class="raw-text">{{ ocrBatchResult.raw_text }}</p>
+            </van-collapse-item>
+          </van-collapse>
         </div>
       </div>
+      
+      <!-- 没有识别到结果 -->
+      <div v-else-if="ocrBatchResult && ocrBatchResult.items.length === 0" class="ocr-empty">
+        <van-empty description="未识别到账单信息" />
+      </div>
+      
+      <div class="ocr-actions">
+        <van-button @click="resetOcrDialog">取消</van-button>
+        <van-button 
+          type="primary" 
+          @click="handleBatchAddBills"
+          :disabled="!hasSelectedItems"
+        >
+          添加选中 ({{ selectedItemCount }}条)
+        </van-button>
+      </div>
     </van-dialog>
+    
+    <!-- OCR 分类选择器 -->
+    <van-popup v-model:show="showOcrCategoryPicker" position="bottom">
+      <van-picker
+        :columns="ocrCategoryColumns"
+        @confirm="onOcrCategoryConfirm"
+        @cancel="showOcrCategoryPicker = false"
+      />
+    </van-popup>
+    
+    <!-- OCR 来源选择器 -->
+    <van-popup v-model:show="showOcrSourcePicker" position="bottom">
+      <van-picker
+        :columns="sourceColumns"
+        @confirm="onOcrSourceConfirm"
+        @cancel="showOcrSourcePicker = false"
+      />
+    </van-popup>
+    
+    <!-- OCR 成员选择器 -->
+    <van-popup v-model:show="showOcrMemberPicker" position="bottom">
+      <van-picker
+        :columns="ocrMemberColumns"
+        @confirm="onOcrMemberConfirm"
+        @cancel="showOcrMemberPicker = false"
+      />
+    </van-popup>
 
     <!-- Date Picker -->
     <van-popup v-model:show="showDatePicker" position="bottom">
@@ -260,6 +332,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useBillStore } from '../stores/bill'
 import { useFamilyStore } from '../stores/family'
 import { ocrApi, imageApi } from '../api/tauri'
+import type { OcrBatchResult, OcrBillItem } from '../api/tauri'
 import { showConfirmDialog, showToast } from 'vant'
 import { validateBill } from '../utils/validation'
 import { formatErrorMessage } from '../utils/errorHandler'
@@ -279,9 +352,20 @@ const showOcrDatePicker = ref(false)
 const showSourcePicker = ref(false)
 const showNewBillMemberPicker = ref(false)
 const showNewBillCategoryPicker = ref(false)
+const showOcrCategoryPicker = ref(false)
+const showOcrSourcePicker = ref(false)
+const showOcrMemberPicker = ref(false)
 const fileList = ref([])
 const ocrResult = ref<any>(null)
+const ocrBatchResult = ref<OcrBatchResult | null>(null)
+const ocrItemSelections = ref<boolean[]>([])
+const ocrItemSources = ref<string[]>([])
+const currentOcrItemIndex = ref(0)
+const selectAllOcr = ref(true)
+const rawTextCollapse = ref<string[]>([])
 const currentImagePath = ref<string | null>(null)
+const ocrMemberId = ref(0)
+const ocrMemberDisplayName = ref('')
 const editingBill = ref<Bill | null>(null)
 
 // Vant 4 DatePicker 需要字符串数组格式 ['2024', '01', '05']
@@ -339,6 +423,26 @@ const categoryColumns = computed(() => {
     { text: '全部', value: null },
     ...billStore.categories.map(c => ({ text: c.name, value: c.id }))
   ]
+})
+
+// OCR 分类选择（不包含"全部"选项）
+const ocrCategoryColumns = computed(() => {
+  return billStore.categories.map(c => ({ text: c.name, value: c.id, type: c.type }))
+})
+
+// OCR 成员选择（不包含"全部"选项）
+const ocrMemberColumns = computed(() => {
+  return familyStore.members.map(m => ({ text: m.name, value: m.id }))
+})
+
+// 计算选中的账单数量
+const selectedItemCount = computed(() => {
+  return ocrItemSelections.value.filter(Boolean).length
+})
+
+// 是否有选中的账单
+const hasSelectedItems = computed(() => {
+  return selectedItemCount.value > 0
 })
 
 const loadBills = async () => {
@@ -470,11 +574,26 @@ const handleOcrUpload = async (file: any) => {
         const imagePath = await imageApi.saveUploadedImage(imageData, file.file.name)
         currentImagePath.value = imagePath
         
-        // Perform OCR recognition
-        const result = await ocrApi.recognizeImage(imagePath)
-        ocrResult.value = result
+        // Perform batch OCR recognition
+        const result = await ocrApi.recognizeBatch(imagePath)
+        ocrBatchResult.value = result
         
-        showToast('OCR识别完成，请确认信息')
+        // 初始化选择状态（默认全选）和来源（默认微信）
+        ocrItemSelections.value = result.items.map(() => true)
+        ocrItemSources.value = result.items.map(() => '微信')
+        selectAllOcr.value = true
+        
+        // 初始化默认成员
+        if (familyStore.members.length > 0) {
+          ocrMemberId.value = familyStore.members[0].id
+          ocrMemberDisplayName.value = familyStore.members[0].name
+        }
+        
+        if (result.items.length > 0) {
+          showToast(`识别到 ${result.items.length} 条账单`)
+        } else {
+          showToast('未识别到账单信息')
+        }
       } catch (error) {
         console.error('OCR error:', error)
         showToast('OCR识别失败: ' + (error as Error).message)
@@ -492,14 +611,64 @@ const handleOcrUpload = async (file: any) => {
   }
 }
 
-const handleConfirmOcrBill = async () => {
-  if (!ocrResult.value) {
-    showToast('请先上传图片并识别')
-    return
+// 全选/取消全选
+const toggleSelectAll = (val: boolean) => {
+  ocrItemSelections.value = ocrItemSelections.value.map(() => val)
+}
+
+// 打开分类选择器
+const openOcrCategoryPicker = (index: number) => {
+  currentOcrItemIndex.value = index
+  showOcrCategoryPicker.value = true
+}
+
+// 打开来源选择器
+const openOcrSourcePicker = (index: number) => {
+  currentOcrItemIndex.value = index
+  showOcrSourcePicker.value = true
+}
+
+// 确认分类选择
+const onOcrCategoryConfirm = ({ selectedOptions }: any) => {
+  if (ocrBatchResult.value && selectedOptions[0]) {
+    ocrBatchResult.value.items[currentOcrItemIndex.value].category = selectedOptions[0].text
+    // 同时更新 bill_type
+    ocrBatchResult.value.items[currentOcrItemIndex.value].bill_type = selectedOptions[0].type
   }
-  
-  if (!ocrResult.value.amount || ocrResult.value.amount <= 0) {
-    showToast('请输入有效金额')
+  showOcrCategoryPicker.value = false
+}
+
+// 确认来源选择
+const onOcrSourceConfirm = ({ selectedOptions }: any) => {
+  if (selectedOptions[0]) {
+    ocrItemSources.value[currentOcrItemIndex.value] = selectedOptions[0].text
+  }
+  showOcrSourcePicker.value = false
+}
+
+// 确认成员选择
+const onOcrMemberConfirm = ({ selectedOptions }: any) => {
+  if (selectedOptions[0]) {
+    ocrMemberId.value = selectedOptions[0].value
+    ocrMemberDisplayName.value = selectedOptions[0].text
+  }
+  showOcrMemberPicker.value = false
+}
+
+// 获取来源值
+const getSourceValue = (sourceName: string): 'wechat' | 'alipay' | 'manual' => {
+  const sourceMap: Record<string, 'wechat' | 'alipay' | 'manual'> = {
+    '微信': 'wechat',
+    '支付宝': 'alipay',
+    '手动': 'manual'
+  }
+  return sourceMap[sourceName] || 'manual'
+}
+
+// 批量添加账单
+const handleBatchAddBills = async () => {
+  if (!ocrBatchResult.value || !hasSelectedItems.value) {
+    showToast('请选择要添加的账单')
     return
   }
   
@@ -513,43 +682,71 @@ const handleConfirmOcrBill = async () => {
     return
   }
   
-  try {
-    // Get default member and category
-    const defaultMember = familyStore.members[0]
-    const defaultCategory = billStore.categories.find(
-      c => c.type === ocrResult.value.type
-    ) || billStore.categories[0]
+  // 使用用户选择的成员，如果没选择则使用默认成员
+  const memberId = ocrMemberId.value > 0 ? ocrMemberId.value : familyStore.members[0].id
+  
+  let successCount = 0
+  let failCount = 0
+  
+  showToast('正在添加账单...')
+  
+  for (let i = 0; i < ocrBatchResult.value.items.length; i++) {
+    if (!ocrItemSelections.value[i]) continue
+    
+    const item = ocrBatchResult.value.items[i]
+    
+    // 根据分类名称查找分类 ID
+    let category = billStore.categories.find(c => c.name === item.category)
+    if (!category) {
+      // 如果没有找到匹配的分类，使用默认分类
+      category = billStore.categories.find(c => c.type === item.bill_type) || billStore.categories[0]
+    }
     
     const bill = {
-      member_id: defaultMember.id,
-      category_id: defaultCategory.id,
-      type: ocrResult.value.type as 'income' | 'expense',
-      amount: ocrResult.value.amount,
-      description: ocrResult.value.description || 'OCR识别账单',
-      source: 'wechat' as 'wechat' | 'alipay' | 'manual',
-      bill_date: ocrResult.value.bill_date || new Date().toISOString().split('T')[0]
+      member_id: memberId,
+      category_id: category.id,
+      type: item.bill_type as 'income' | 'expense',
+      amount: item.amount,
+      description: item.category,
+      source: getSourceValue(ocrItemSources.value[i]),
+      bill_date: ocrBatchResult.value.bill_date
     }
     
-    if (currentImagePath.value) {
-      await ocrApi.saveBillWithImage(bill, currentImagePath.value)
-    } else {
+    try {
       await billStore.createBill(bill)
+      successCount++
+    } catch (error) {
+      console.error('Failed to add bill:', error)
+      failCount++
     }
-    
-    showToast('账单保存成功')
+  }
+  
+  if (successCount > 0) {
+    showToast(`成功添加 ${successCount} 条账单${failCount > 0 ? `，${failCount} 条失败` : ''}`)
     showOcrDialog.value = false
     resetOcrDialog()
     await loadBills()
-  } catch (error) {
-    console.error('Save bill error:', error)
-    showToast('保存失败')
+  } else {
+    showToast('添加失败')
   }
+}
+
+const handleConfirmOcrBill = async () => {
+  // 保留旧方法兼容性，实际使用 handleBatchAddBills
+  await handleBatchAddBills()
 }
 
 const resetOcrDialog = () => {
   fileList.value = []
   ocrResult.value = null
+  ocrBatchResult.value = null
+  ocrItemSelections.value = []
+  ocrItemSources.value = []
   currentImagePath.value = null
+  selectAllOcr.value = true
+  rawTextCollapse.value = []
+  ocrMemberId.value = 0
+  ocrMemberDisplayName.value = ''
 }
 
 const viewBill = (bill: Bill) => {
@@ -767,5 +964,101 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 15px;
+}
+
+/* OCR 批量结果样式 */
+.ocr-batch-result {
+  padding: 15px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ocr-member-select {
+  margin-bottom: 15px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  padding: 5px;
+}
+
+.ocr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.ocr-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.ocr-items-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.ocr-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: #f7f8fa;
+  border-radius: 8px;
+}
+
+.item-checkbox {
+  margin-right: 10px;
+  margin-top: 12px;
+}
+
+.item-content {
+  flex: 1;
+}
+
+.item-content .van-field {
+  padding: 8px 0;
+}
+
+.ocr-summary {
+  margin-top: 15px;
+  padding: 10px;
+  background: #e8f4e8;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.ocr-summary p {
+  margin: 5px 0;
+}
+
+.ocr-empty {
+  padding: 20px;
+}
+
+.ocr-actions {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px;
+  gap: 10px;
+  background: #fff;
+  border-top: 1px solid #eee;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.ocr-actions .van-button {
+  flex: 1;
+}
+
+/* OCR 对话框样式 */
+:deep(.ocr-dialog) {
+  width: 90%;
+  max-width: 400px;
+}
+
+:deep(.ocr-dialog .van-dialog__content) {
+  max-height: 70vh;
+  overflow-y: auto;
 }
 </style>

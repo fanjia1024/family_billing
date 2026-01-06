@@ -62,6 +62,7 @@ pub fn run() {
             commands::category::delete_category,
             // OCR commands
             commands::ocr::ocr_recognize,
+            commands::ocr::ocr_recognize_batch,
             commands::ocr::save_bill_with_image,
             // Export/Import commands
             commands::export::export_to_json,

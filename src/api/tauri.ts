@@ -50,10 +50,27 @@ export const categoryApi = {
   deleteCategory: (id: number) => safeInvoke<void>('delete_category', { id })
 }
 
+// OCR 批量识别结果类型
+export interface OcrBillItem {
+  category: string
+  amount: number
+  percentage: number | null
+  bill_type: 'income' | 'expense'
+}
+
+export interface OcrBatchResult {
+  items: OcrBillItem[]
+  total_amount: number
+  bill_date: string
+  raw_text: string
+}
+
 // OCR commands
 export const ocrApi = {
   recognizeImage: (imagePath: string) =>
     safeInvoke<{ type: 'income' | 'expense'; amount: number; description: string; bill_date: string; raw_text: string }>('ocr_recognize', { imagePath }),
+  recognizeBatch: (imagePath: string) =>
+    safeInvoke<OcrBatchResult>('ocr_recognize_batch', { imagePath }),
   saveBillWithImage: (bill: { member_id: number; category_id: number; type: 'income' | 'expense'; amount: number; description: string; source: 'wechat' | 'alipay' | 'manual'; bill_date: string }, imagePath: string) =>
     safeInvoke<number>('save_bill_with_image', { bill, imagePath })
 }
