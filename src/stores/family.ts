@@ -53,7 +53,12 @@ export const useFamilyStore = defineStore('family', () => {
   const loadMembers = async () => {
     loading.value = true
     try {
-      members.value = await memberApi.getMembers()
+      const loadedMembers = await memberApi.getMembers()
+      // 确保 role 类型正确
+      members.value = loadedMembers.map(member => ({
+        ...member,
+        role: (member.role === 'admin' || member.role === 'member') ? member.role : 'member' as 'admin' | 'member'
+      }))
     } catch (error) {
       console.error('Failed to load members:', error)
     } finally {

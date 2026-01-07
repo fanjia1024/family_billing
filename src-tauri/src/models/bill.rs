@@ -10,6 +10,7 @@ pub struct Bill {
     pub description: Option<String>,
     pub source: String,
     pub bill_date: String,
+    pub bill_month: Option<String>,
     pub created_at: String,
 }
 
@@ -22,6 +23,7 @@ pub struct CreateBill {
     pub description: Option<String>,
     pub source: String,
     pub bill_date: String,
+    pub bill_month: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,6 +34,7 @@ pub struct UpdateBill {
     pub amount: Option<f64>,
     pub description: Option<String>,
     pub bill_date: Option<String>,
+    pub bill_month: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

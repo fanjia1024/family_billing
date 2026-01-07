@@ -7,9 +7,9 @@
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "tauri:dev": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig tauri dev",
-    "tauri:build": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig tauri build"
+    "tauri": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH tauri",
+    "tauri:dev": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH tauri dev",
+    "tauri:build": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",

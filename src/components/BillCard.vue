@@ -1,5 +1,6 @@
 <template>
   <van-card
+    v-if="bill"
     :title="bill.description || '无描述'"
     :desc="formatBillInfo(bill)"
     :thumb="billImageUrl"
@@ -37,6 +38,7 @@
       </div>
     </template>
   </van-card>
+  <div v-else class="invalid-bill">无效账单数据</div>
 </template>
 
 <script setup lang="ts">
@@ -45,7 +47,7 @@ import type { Bill } from '../types'
 import dayjs from 'dayjs'
 
 const props = defineProps<{
-  bill: Bill
+  bill: Bill | null | undefined
 }>()
 
 defineEmits<{
@@ -54,6 +56,7 @@ defineEmits<{
 }>()
 
 const billImageUrl = computed(() => {
+  if (!props.bill) return undefined
   if (props.bill.images && props.bill.images.length > 0) {
     // Return image URL if available
     return props.bill.images[0].image_path
@@ -61,13 +64,15 @@ const billImageUrl = computed(() => {
   return undefined
 })
 
-const formatBillInfo = (bill: Bill) => {
-  const amount = `¥${bill.amount.toFixed(2)}`
+const formatBillInfo = (bill: Bill | null | undefined) => {
+  if (!bill) return '无效账单'
+  const amount = `¥${(bill.amount || 0).toFixed(2)}`
   const member = bill.member ? ` - ${bill.member.name}` : ''
   return `${amount}${member}`
 }
 
-const formatDate = (date: string) => {
+const formatDate = (date: string | undefined) => {
+  if (!date) return '未知日期'
   return dayjs(date).format('YYYY-MM-DD')
 }
 </script>

@@ -71,7 +71,7 @@
         <h3>支出分类详情</h3>
         <van-cell-group>
           <van-cell
-            v-for="(item, index) in statistics.category_data"
+            v-for="item in statistics.category_data"
             :key="item.category_id"
             :title="item.category_name"
             :value="`¥${item.amount.toFixed(2)}`"

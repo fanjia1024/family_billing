@@ -4,6 +4,7 @@ import { billApi, categoryApi } from '../api/tauri'
 import { formatErrorMessage } from '../utils/errorHandler'
 import { showToast } from 'vant'
 import type { Bill, Category, BillFilters } from '../types'
+import { useFamilyStore } from './family'
 
 export const useBillStore = defineStore('bill', () => {
   const bills = ref<Bill[]>([])
@@ -13,10 +14,66 @@ export const useBillStore = defineStore('bill', () => {
   const loadBills = async (filters?: BillFilters) => {
     loading.value = true
     try {
-      bills.value = await billApi.getBills(filters)
+      console.log('[loadBills] 开始加载账单，filters:', filters)
+      const loadedBills = await billApi.getBills(filters)
+      console.log('[loadBills] 从API获取的账单数量:', loadedBills?.length || 0)
+      
+      // 过滤掉 null 或 undefined 的账单
+      const validBills = (loadedBills || []).filter(bill => bill != null && typeof bill === 'object')
+      console.log('[loadBills] 有效账单数量:', validBills.length)
+      
+      // 确保 familyStore 和 categories 已加载
+      const familyStore = useFamilyStore()
+      if (familyStore.members.length === 0) {
+        console.log('[loadBills] 成员列表为空，开始加载成员')
+        await familyStore.loadMembers()
+      }
+      console.log('[loadBills] 成员数量:', familyStore.members.length)
+      
+      if (categories.value.length === 0) {
+        console.log('[loadBills] 分类列表为空，开始加载分类')
+        await loadCategories()
+      }
+      console.log('[loadBills] 分类数量:', categories.value.length)
+      
+      // 填充 member 和 category 数据，添加安全检查
+      bills.value = validBills.map(bill => {
+        try {
+          if (!bill || typeof bill !== 'object') {
+            console.warn('[loadBills] 无效的账单对象:', bill)
+            return null
+          }
+          
+          if (typeof bill.member_id === 'undefined' || bill.member_id === null) {
+            console.warn('[loadBills] 账单缺少 member_id:', bill)
+            return null
+          }
+          
+          if (typeof bill.category_id === 'undefined' || bill.category_id === null) {
+            console.warn('[loadBills] 账单缺少 category_id:', bill)
+            return null
+          }
+          
+          const member = familyStore.members.find(m => m.id === bill.member_id)
+          const category = categories.value.find(c => c.id === bill.category_id)
+          
+          return {
+            ...bill,
+            member: member || undefined,
+            category: category || undefined
+          }
+        } catch (err) {
+          console.error('[loadBills] 处理账单时出错:', err, bill)
+          return null
+        }
+      }).filter(bill => bill != null) as Bill[]
+      
+      console.log('[loadBills] 最终账单数量:', bills.value.length)
     } catch (error) {
-      console.error('Failed to load bills:', error)
+      console.error('[loadBills] 加载账单失败:', error)
       showToast(formatErrorMessage(error, '加载账单失败'))
+      // 即使出错也设置空数组，避免页面崩溃
+      bills.value = []
     } finally {
       loading.value = false
     }
@@ -30,6 +87,7 @@ export const useBillStore = defineStore('bill', () => {
     description: string
     source: 'wechat' | 'alipay' | 'manual'
     bill_date: string
+    bill_month?: string
   }) => {
     loading.value = true
     try {
@@ -52,6 +110,7 @@ export const useBillStore = defineStore('bill', () => {
     amount: number
     description: string
     bill_date: string
+    bill_month?: string
   }>) => {
     loading.value = true
     try {
@@ -85,7 +144,12 @@ export const useBillStore = defineStore('bill', () => {
   const loadCategories = async () => {
     loading.value = true
     try {
-      categories.value = await categoryApi.getCategories()
+      const loadedCategories = await categoryApi.getCategories()
+      // 确保类型正确
+      categories.value = loadedCategories.map(cat => ({
+        ...cat,
+        type: (cat.type === 'income' || cat.type === 'expense') ? cat.type : 'expense' as 'income' | 'expense'
+      }))
     } catch (error) {
       console.error('Failed to load categories:', error)
     } finally {

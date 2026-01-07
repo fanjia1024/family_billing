@@ -33,7 +33,7 @@ export const memberApi = {
 export const billApi = {
   getBills: (filters?: { member_id?: number; category_id?: number; start_date?: string; end_date?: string }) =>
     safeInvoke<Array<any>>('get_bills', { filters }),
-  createBill: (bill: { member_id: number; category_id: number; type: 'income' | 'expense'; amount: number; description: string; source: 'wechat' | 'alipay' | 'manual'; bill_date: string }) =>
+  createBill: (bill: { member_id: number; category_id: number; type: 'income' | 'expense'; amount: number; description: string; source: 'wechat' | 'alipay' | 'manual'; bill_date: string; bill_month?: string }) =>
     safeInvoke<number>('create_bill', { bill }),
   updateBill: (id: number, bill: Partial<{ member_id: number; category_id: number; type: 'income' | 'expense'; amount: number; description: string; bill_date: string }>) =>
     safeInvoke<void>('update_bill', { id, bill }),
@@ -62,6 +62,7 @@ export interface OcrBatchResult {
   items: OcrBillItem[]
   total_amount: number
   bill_date: string
+  bill_month?: string
   raw_text: string
 }
 
@@ -71,7 +72,7 @@ export const ocrApi = {
     safeInvoke<{ type: 'income' | 'expense'; amount: number; description: string; bill_date: string; raw_text: string }>('ocr_recognize', { imagePath }),
   recognizeBatch: (imagePath: string) =>
     safeInvoke<OcrBatchResult>('ocr_recognize_batch', { imagePath }),
-  saveBillWithImage: (bill: { member_id: number; category_id: number; type: 'income' | 'expense'; amount: number; description: string; source: 'wechat' | 'alipay' | 'manual'; bill_date: string }, imagePath: string) =>
+  saveBillWithImage: (bill: { member_id: number; category_id: number; type: 'income' | 'expense'; amount: number; description: string; source: 'wechat' | 'alipay' | 'manual'; bill_date: string; bill_month?: string }, imagePath: string) =>
     safeInvoke<number>('save_bill_with_image', { bill, imagePath })
 }
 

@@ -25,6 +25,10 @@ pub fn init_database(app: &AppHandle) -> AnyhowResult<()> {
     info!("[init_database] 数据库连接成功");
 
     create_tables(&conn)?;
+
+    // 执行数据库迁移（如新增字段等）
+    migrate_bill_month(&conn)?;
+
     init_default_data(&conn)?;
 
     info!("[init_database] 数据库初始化完成");
@@ -94,6 +98,7 @@ fn create_tables(conn: &Connection) -> Result<()> {
             description TEXT,
             source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('wechat', 'alipay', 'manual')),
             bill_date TEXT NOT NULL,
+            bill_month TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (member_id) REFERENCES member(id),
             FOREIGN KEY (category_id) REFERENCES category(id)
@@ -131,6 +136,53 @@ fn create_tables(conn: &Connection) -> Result<()> {
     )?;
 
     info!("[create_tables] 数据库表创建完成");
+    Ok(())
+}
+
+/// 迁移逻辑：为已有数据库添加 bill_month 字段并回填数据
+fn migrate_bill_month(conn: &Connection) -> Result<()> {
+    debug!("[migrate_bill_month] 开始检查并迁移 bill_month 字段");
+
+    // 检查 bill 表中是否已经存在 bill_month 字段
+    let mut stmt =
+        conn.prepare("SELECT 1 FROM pragma_table_info('bill') WHERE name = 'bill_month' LIMIT 1")?;
+    let exists = stmt.exists([])?;
+
+    if !exists {
+        debug!("[migrate_bill_month] bill_month 字段不存在，开始执行 ALTER TABLE");
+        conn.execute("ALTER TABLE bill ADD COLUMN bill_month TEXT", [])?;
+
+        debug!("[migrate_bill_month] 开始根据 bill_date 回填 bill_month 数据");
+        conn.execute(
+            "UPDATE bill SET bill_month = strftime('%Y-%m', bill_date) WHERE bill_month IS NULL OR bill_month = ''",
+            [],
+        )?;
+    } else {
+        debug!("[migrate_bill_month] bill_month 字段已存在，检查是否需要回填数据");
+        // 即使字段存在，也可能有旧数据需要回填
+        conn.execute(
+            "UPDATE bill SET bill_month = strftime('%Y-%m', bill_date) WHERE bill_month IS NULL OR bill_month = ''",
+            [],
+        )?;
+    }
+
+    // 检查索引是否存在，如果不存在则创建
+    let mut index_stmt = conn.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_bill_month' LIMIT 1"
+    )?;
+    let index_exists = index_stmt.exists([])?;
+
+    if !index_exists {
+        debug!("[migrate_bill_month] 创建 bill_month 索引");
+        conn.execute(
+            "CREATE INDEX idx_bill_month ON bill(bill_month)",
+            [],
+        )?;
+    } else {
+        debug!("[migrate_bill_month] bill_month 索引已存在");
+    }
+
+    info!("[migrate_bill_month] bill_month 字段迁移完成");
     Ok(())
 }
 

@@ -29,6 +29,7 @@ export interface Bill {
   description: string
   source: 'wechat' | 'alipay' | 'manual'
   bill_date: string
+  bill_month?: string
   created_at: string
   member?: Member
   category?: Category

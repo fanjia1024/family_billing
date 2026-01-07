@@ -34,5 +34,10 @@ const router = createRouter({
   routes
 })
 
+// 添加错误处理
+router.onError((error) => {
+  console.error('Router error:', error)
+})
+
 export default router
 

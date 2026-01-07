@@ -10,7 +10,7 @@
 
     <div class="filters">
       <van-field
-        v-model="filters.member_id"
+        :model-value="filters.member_id ? String(filters.member_id) : ''"
         label="成员"
         placeholder="选择成员"
         is-link
@@ -18,7 +18,7 @@
         @click="showMemberPicker = true"
       />
       <van-field
-        v-model="filters.category_id"
+        :model-value="filters.category_id ? String(filters.category_id) : ''"
         label="分类"
         placeholder="选择分类"
         is-link
@@ -29,10 +29,13 @@
       <van-button @click="resetFilters">重置</van-button>
     </div>
 
-    <div v-if="billStore.bills.length > 0" class="bills-list">
+    <div v-if="billStore.loading" class="loading">
+      <van-loading>加载中...</van-loading>
+    </div>
+    <div v-else-if="billStore.bills && billStore.bills.length > 0" class="bills-list">
       <BillCard
         v-for="bill in billStore.bills"
-        :key="bill.id"
+        :key="bill?.id || Math.random()"
         :bill="bill"
         @edit="viewBill"
         @delete="handleDeleteBill"
@@ -109,6 +112,15 @@
             readonly
             @click="showDatePicker = true"
           />
+          <van-field
+            v-model="newBill.bill_month"
+            name="bill_month"
+            label="月份"
+            placeholder="选择月份"
+            is-link
+            readonly
+            @click="showMonthPicker = true"
+          />
         </van-cell-group>
       </van-form>
     </van-dialog>
@@ -135,7 +147,7 @@
       
       <!-- 多条账单识别结果 -->
       <div v-if="ocrBatchResult && ocrBatchResult.items.length > 0" class="ocr-batch-result">
-        <!-- 成员选择 -->
+        <!-- 成员、月份选择 -->
         <div class="ocr-member-select">
           <van-field
             v-model="ocrMemberDisplayName"
@@ -144,6 +156,14 @@
             is-link
             readonly
             @click="showOcrMemberPicker = true"
+          />
+          <van-field
+            v-model="ocrBillMonth"
+            label="账单月份"
+            placeholder="选择月份"
+            is-link
+            readonly
+            @click="showOcrMonthPicker = true"
           />
         </div>
         
@@ -244,12 +264,32 @@
       />
     </van-popup>
 
+    <!-- OCR Month Picker -->
+    <van-popup v-model:show="showOcrMonthPicker" position="bottom">
+      <van-date-picker
+        v-model="ocrMonthPickerValue"
+        :columns-type="['year', 'month']"
+        @confirm="onOcrMonthConfirm"
+        @cancel="showOcrMonthPicker = false"
+      />
+    </van-popup>
+
     <!-- Date Picker -->
     <van-popup v-model:show="showDatePicker" position="bottom">
       <van-date-picker
         v-model="datePickerValue"
         @confirm="onDateConfirm"
         @cancel="showDatePicker = false"
+      />
+    </van-popup>
+
+    <!-- Month Picker -->
+    <van-popup v-model:show="showMonthPicker" position="bottom">
+      <van-date-picker
+        v-model="monthPickerValue"
+        :columns-type="['year', 'month']"
+        @confirm="onMonthConfirm"
+        @cancel="showMonthPicker = false"
       />
     </van-popup>
 
@@ -332,7 +372,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useBillStore } from '../stores/bill'
 import { useFamilyStore } from '../stores/family'
 import { ocrApi, imageApi } from '../api/tauri'
-import type { OcrBatchResult, OcrBillItem } from '../api/tauri'
+import type { OcrBatchResult } from '../api/tauri'
 import { showConfirmDialog, showToast } from 'vant'
 import { validateBill } from '../utils/validation'
 import { formatErrorMessage } from '../utils/errorHandler'
@@ -347,6 +387,7 @@ const showMemberPicker = ref(false)
 const showCategoryPicker = ref(false)
 const showTypePicker = ref(false)
 const showDatePicker = ref(false)
+const showMonthPicker = ref(false)
 const showOcrTypePicker = ref(false)
 const showOcrDatePicker = ref(false)
 const showSourcePicker = ref(false)
@@ -355,6 +396,7 @@ const showNewBillCategoryPicker = ref(false)
 const showOcrCategoryPicker = ref(false)
 const showOcrSourcePicker = ref(false)
 const showOcrMemberPicker = ref(false)
+const showOcrMonthPicker = ref(false)
 const fileList = ref([])
 const ocrResult = ref<any>(null)
 const ocrBatchResult = ref<OcrBatchResult | null>(null)
@@ -366,14 +408,24 @@ const rawTextCollapse = ref<string[]>([])
 const currentImagePath = ref<string | null>(null)
 const ocrMemberId = ref(0)
 const ocrMemberDisplayName = ref('')
+const ocrBillMonth = ref('')
 const editingBill = ref<Bill | null>(null)
 
 // Vant 4 DatePicker 需要字符串数组格式 ['2024', '01', '05']
 const today = new Date()
+const ocrMonthPickerValue = ref<string[]>([
+  String(today.getFullYear()),
+  String(today.getMonth() + 1).padStart(2, '0')
+])
 const datePickerValue = ref<string[]>([
   String(today.getFullYear()),
   String(today.getMonth() + 1).padStart(2, '0'),
   String(today.getDate()).padStart(2, '0')
+])
+// 月份选择器值 ['2024', '01']
+const monthPickerValue = ref<string[]>([
+  String(today.getFullYear()),
+  String(today.getMonth() + 1).padStart(2, '0')
 ])
 const ocrDatePickerValue = ref<string[]>([
   String(today.getFullYear()),
@@ -397,7 +449,8 @@ const newBill = ref({
   amount: 0,
   description: '',
   source: 'manual' as 'wechat' | 'alipay' | 'manual',
-  bill_date: new Date().toISOString().split('T')[0]
+  bill_date: new Date().toISOString().split('T')[0],
+  bill_month: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
 })
 
 const typeColumns = [
@@ -413,14 +466,14 @@ const sourceColumns = [
 
 const memberColumns = computed(() => {
   return [
-    { text: '全部', value: null },
+    { text: '全部', value: 0 },
     ...familyStore.members.map(m => ({ text: m.name, value: m.id }))
   ]
 })
 
 const categoryColumns = computed(() => {
   return [
-    { text: '全部', value: null },
+    { text: '全部', value: 0 },
     ...billStore.categories.map(c => ({ text: c.name, value: c.id }))
   ]
 })
@@ -492,6 +545,11 @@ const handleAddBill = async () => {
   if (!newBill.value.bill_date) {
     newBill.value.bill_date = new Date().toISOString().split('T')[0]
   }
+
+  // 确保 bill_month 存在（默认为 bill_date 的年月）
+  if (!newBill.value.bill_month) {
+    newBill.value.bill_month = newBill.value.bill_date.slice(0, 7)
+  }
   
   // 确保 source 存在
   if (!newBill.value.source) {
@@ -520,7 +578,8 @@ const handleAddBill = async () => {
     amount: Number(newBill.value.amount),
     description: newBill.value.description || '',
     source: newBill.value.source,
-    bill_date: newBill.value.bill_date
+    bill_date: newBill.value.bill_date,
+    bill_month: newBill.value.bill_month
   }
   
   // 调试日志
@@ -535,7 +594,8 @@ const handleAddBill = async () => {
         type: billData.type,
         amount: billData.amount,
         description: billData.description,
-        bill_date: billData.bill_date
+        bill_date: billData.bill_date,
+        bill_month: billData.bill_month
       })
       showToast('更新成功')
     } else {
@@ -587,6 +647,29 @@ const handleOcrUpload = async (file: any) => {
         if (familyStore.members.length > 0) {
           ocrMemberId.value = familyStore.members[0].id
           ocrMemberDisplayName.value = familyStore.members[0].name
+        }
+        
+        // 初始化月份：从OCR识别的日期提取，或使用当前年月
+        if (result.bill_month) {
+          ocrBillMonth.value = result.bill_month
+          const monthParts = result.bill_month.split('-')
+          if (monthParts.length >= 2) {
+            ocrMonthPickerValue.value = [monthParts[0], monthParts[1]]
+          }
+        } else if (result.bill_date) {
+          const monthFromDate = result.bill_date.slice(0, 7)
+          ocrBillMonth.value = monthFromDate
+          const monthParts = monthFromDate.split('-')
+          if (monthParts.length >= 2) {
+            ocrMonthPickerValue.value = [monthParts[0], monthParts[1]]
+          }
+        } else {
+          const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+          ocrBillMonth.value = currentMonth
+          ocrMonthPickerValue.value = [
+            String(today.getFullYear()),
+            String(today.getMonth() + 1).padStart(2, '0')
+          ]
         }
         
         if (result.items.length > 0) {
@@ -655,6 +738,14 @@ const onOcrMemberConfirm = ({ selectedOptions }: any) => {
   showOcrMemberPicker.value = false
 }
 
+// 确认OCR月份选择
+const onOcrMonthConfirm = ({ selectedValues }: { selectedValues: string[] }) => {
+  const [year, month] = selectedValues
+  ocrBillMonth.value = `${year}-${month}`
+  ocrMonthPickerValue.value = selectedValues
+  showOcrMonthPicker.value = false
+}
+
 // 获取来源值
 const getSourceValue = (sourceName: string): 'wechat' | 'alipay' | 'manual' => {
   const sourceMap: Record<string, 'wechat' | 'alipay' | 'manual'> = {
@@ -702,6 +793,12 @@ const handleBatchAddBills = async () => {
       category = billStore.categories.find(c => c.type === item.bill_type) || billStore.categories[0]
     }
     
+    // 使用用户选择的月份，如果没有则从OCR结果或日期中提取
+    const billMonth = ocrBillMonth.value || 
+      (ocrBatchResult.value.bill_month && ocrBatchResult.value.bill_month.length >= 7
+        ? ocrBatchResult.value.bill_month.slice(0, 7)
+        : ocrBatchResult.value.bill_date.slice(0, 7))
+
     const bill = {
       member_id: memberId,
       category_id: category.id,
@@ -709,7 +806,8 @@ const handleBatchAddBills = async () => {
       amount: item.amount,
       description: item.category,
       source: getSourceValue(ocrItemSources.value[i]),
-      bill_date: ocrBatchResult.value.bill_date
+      bill_date: ocrBatchResult.value.bill_date,
+      bill_month: billMonth
     }
     
     try {
@@ -731,10 +829,6 @@ const handleBatchAddBills = async () => {
   }
 }
 
-const handleConfirmOcrBill = async () => {
-  // 保留旧方法兼容性，实际使用 handleBatchAddBills
-  await handleBatchAddBills()
-}
 
 const resetOcrDialog = () => {
   fileList.value = []
@@ -747,18 +841,29 @@ const resetOcrDialog = () => {
   rawTextCollapse.value = []
   ocrMemberId.value = 0
   ocrMemberDisplayName.value = ''
+  ocrBillMonth.value = ''
+  ocrMonthPickerValue.value = [
+    String(today.getFullYear()),
+    String(today.getMonth() + 1).padStart(2, '0')
+  ]
 }
 
 const viewBill = (bill: Bill) => {
+  if (!bill) {
+    console.error('viewBill: bill is undefined or null')
+    return
+  }
+  
   editingBill.value = bill
   newBill.value = {
-    member_id: bill.member_id,
-    category_id: bill.category_id,
-    type: bill.type,
-    amount: bill.amount,
-    description: bill.description,
-    source: bill.source,
-    bill_date: bill.bill_date
+    member_id: bill.member_id || 0,
+    category_id: bill.category_id || 0,
+    type: bill.type || 'expense',
+    amount: bill.amount || 0,
+    description: bill.description || '',
+    source: bill.source || 'manual',
+    bill_date: bill.bill_date || new Date().toISOString().split('T')[0],
+    bill_month: bill.bill_month || (bill.bill_date ? bill.bill_date.slice(0, 7) : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`)
   }
   
   // 更新显示名称
@@ -778,6 +883,13 @@ const viewBill = (bill: Bill) => {
     datePickerValue.value = dateParts
   }
   
+  // 设置月份选择器值
+  const billMonth = bill.bill_month || bill.bill_date.slice(0, 7)
+  const monthParts = billMonth.split('-')
+  if (monthParts.length >= 2) {
+    monthPickerValue.value = [monthParts[0], monthParts[1]]
+  }
+  
   showAddBillDialog.value = true
 }
 
@@ -791,7 +903,8 @@ const resetBillForm = () => {
     amount: 0,
     description: '',
     source: 'manual',
-    bill_date: today.toISOString().split('T')[0]
+    bill_date: today.toISOString().split('T')[0],
+    bill_month: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
   }
   memberDisplayName.value = ''
   categoryDisplayName.value = ''
@@ -803,13 +916,27 @@ const resetBillForm = () => {
     String(today.getMonth() + 1).padStart(2, '0'),
     String(today.getDate()).padStart(2, '0')
   ]
+  monthPickerValue.value = [
+    String(today.getFullYear()),
+    String(today.getMonth() + 1).padStart(2, '0')
+  ]
 }
 
 // Date picker handlers - Vant 4 返回 { selectedValues: ['2024', '01', '05'] }
 const onDateConfirm = ({ selectedValues }: { selectedValues: string[] }) => {
   newBill.value.bill_date = selectedValues.join('-')
+  // 同步更新 bill_month 为选择日期的年月
+  newBill.value.bill_month = `${selectedValues[0]}-${selectedValues[1]}`
   datePickerValue.value = selectedValues
   showDatePicker.value = false
+}
+
+// Month picker handlers - 只选择年月 ['2024', '01']
+const onMonthConfirm = ({ selectedValues }: { selectedValues: string[] }) => {
+  const [year, month] = selectedValues
+  newBill.value.bill_month = `${year}-${month}`
+  monthPickerValue.value = selectedValues
+  showMonthPicker.value = false
 }
 
 const onOcrDateConfirm = ({ selectedValues }: { selectedValues: string[] }) => {
@@ -855,12 +982,14 @@ const onSourceConfirm = ({ selectedOptions }: any) => {
 
 // Filter picker handlers
 const onFilterMemberConfirm = ({ selectedOptions }: any) => {
-  filters.value.member_id = selectedOptions[0].value
+  const value = selectedOptions[0].value
+  filters.value.member_id = value === 0 ? null : value
   showMemberPicker.value = false
 }
 
 const onFilterCategoryConfirm = ({ selectedOptions }: any) => {
-  filters.value.category_id = selectedOptions[0].value
+  const value = selectedOptions[0].value
+  filters.value.category_id = value === 0 ? null : value
   showCategoryPicker.value = false
 }
 
@@ -897,9 +1026,14 @@ const handleDeleteBill = async (id: number) => {
 }
 
 onMounted(async () => {
-  await familyStore.loadMembers()
-  await billStore.loadCategories()
-  await loadBills()
+  try {
+    await familyStore.loadMembers()
+    await billStore.loadCategories()
+    await loadBills()
+  } catch (error) {
+    console.error('Bills page initialization error:', error)
+    showToast('页面加载失败，请刷新重试')
+  }
 })
 </script>
 

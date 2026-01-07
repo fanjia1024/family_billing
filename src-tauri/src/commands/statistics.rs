@@ -86,11 +86,12 @@ pub fn get_statistics(
         total_income, total_expense, balance);
 
     // Get monthly data
+    // 优先使用 bill_month 字段，如果为空则从 bill_date 提取
     debug!("[get_statistics] 查询月度数据");
     let mut stmt = conn
         .prepare(&format!(
             "SELECT 
-                strftime('%Y-%m', bill_date) as month,
+                COALESCE(NULLIF(bill_month, ''), strftime('%Y-%m', bill_date)) as month,
                 COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) as income,
                 COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) as expense
             FROM bill {}
