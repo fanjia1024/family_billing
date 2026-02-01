@@ -1,4 +1,7 @@
+mod application;
 mod commands;
+mod domain;
+mod infrastructure;
 mod models;
 mod services;
 mod utils;
@@ -27,16 +30,29 @@ pub fn run() {
             info!("========================================");
             info!("家庭账单管理应用启动");
             info!("========================================");
-            
+
+            let app_handle = app.app_handle().clone();
+
             // Initialize database
-            match services::database::init_database(app.app_handle()) {
+            match infrastructure::persistence::database::init_database(&app_handle) {
                 Ok(_) => info!("数据库初始化成功"),
                 Err(e) => {
                     error!("数据库初始化失败: {:?}", e);
                     return Err(e.into());
                 }
             }
-            
+
+            // Dependency injection: Application layer with Infrastructure implementations
+            let bill_repo = Box::new(infrastructure::persistence::sqlite_bill_repo::SqliteBillRepository::new(
+                app_handle.clone(),
+            ));
+            let ocr_engine = Box::new(infrastructure::ocr::tesseract_engine::TesseractOcrEngine::new());
+            let bill_app_service = application::bill_app_service::BillAppService::new(
+                bill_repo,
+                ocr_engine,
+            );
+            app.manage(bill_app_service);
+
             info!("应用初始化完成");
             Ok(())
         })
