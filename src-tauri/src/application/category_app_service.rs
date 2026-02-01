@@ -2,21 +2,29 @@ use crate::domain::entities::bill::BillFilters;
 use crate::domain::entities::category::{Category, CreateCategory, UpdateCategory};
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::domain::ports::category_repository::CategoryRepository;
+use crate::domain::services::category_validator::CategoryValidator;
+use crate::domain::services::deletion_policy::DeletionPolicy;
 use log::info;
 
 pub struct CategoryAppService {
     category_repo: Box<dyn CategoryRepository>,
     bill_repo: Box<dyn BillRepository>,
+    category_validator: Box<dyn CategoryValidator>,
+    deletion_policy: Box<dyn DeletionPolicy>,
 }
 
 impl CategoryAppService {
     pub fn new(
         category_repo: Box<dyn CategoryRepository>,
         bill_repo: Box<dyn BillRepository>,
+        category_validator: Box<dyn CategoryValidator>,
+        deletion_policy: Box<dyn DeletionPolicy>,
     ) -> Self {
         Self {
             category_repo,
             bill_repo,
+            category_validator,
+            deletion_policy,
         }
     }
 
@@ -28,9 +36,9 @@ impl CategoryAppService {
     pub fn create_category(&self, name: String, r#type: String, icon: Option<String>) -> Result<i64, String> {
         info!("[CategoryAppService] create_category");
         let existing = self.category_repo.list_all()?;
-        if existing.iter().any(|c| c.name == name && c.r#type == r#type) {
-            return Err("该分类已存在".to_string());
-        }
+        self.category_validator
+            .allow_create(&name, &r#type, &existing)
+            .map_err(|e| e.to_string())?;
         self.category_repo.create(&CreateCategory { name, r#type, icon })
     }
 
@@ -47,12 +55,9 @@ impl CategoryAppService {
             start_date: None,
             end_date: None,
         }))?;
-        if !bills.is_empty() {
-            return Err(format!(
-                "该分类有 {} 条关联账单，请先删除账单或更改账单分类",
-                bills.len()
-            ));
-        }
+        self.deletion_policy
+            .allow_delete(bills.len())
+            .map_err(|e| e.to_string())?;
         self.category_repo.delete(id)
     }
 }

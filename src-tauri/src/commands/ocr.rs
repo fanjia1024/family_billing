@@ -1,5 +1,7 @@
 use crate::application::bill_app_service::BillAppService;
 use crate::commands::dto::bill::CreateBillDto;
+use crate::domain::entities::bill::CreateBill;
+use crate::domain::error::to_user_message;
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -119,35 +121,17 @@ pub fn save_bill_with_image(
     debug!("[save_bill_with_image] 账单数据: member_id={}, category_id={}, amount={}, date={}",
         bill.member_id, bill.category_id, bill.amount, bill.bill_date);
 
-    if bill.member_id <= 0 {
-        warn!("[save_bill_with_image] 无效的成员ID: {}", bill.member_id);
-        return Err("无效的成员ID".to_string());
-    }
-    if bill.category_id <= 0 {
-        warn!("[save_bill_with_image] 无效的分类ID: {}", bill.category_id);
-        return Err("无效的分类ID".to_string());
-    }
-    if bill.amount <= 0.0 {
-        warn!("[save_bill_with_image] 无效的金额: {}", bill.amount);
-        return Err("金额必须大于0".to_string());
-    }
-
-    let bill_month = if bill.bill_month.trim().is_empty() {
-        bill.bill_date.chars().take(7).collect::<String>()
-    } else {
-        bill.bill_month.clone()
-    };
-
-    let domain_bill = crate::domain::entities::bill::CreateBill {
-        member_id: bill.member_id,
-        category_id: bill.category_id,
-        r#type: bill.r#type.clone(),
-        amount: bill.amount,
-        description: bill.description.clone(),
-        source: bill.source.clone(),
-        bill_date: bill.bill_date.clone(),
-        bill_month,
-    };
+    let domain_bill = CreateBill::try_new(
+        bill.member_id,
+        bill.category_id,
+        bill.r#type,
+        bill.amount,
+        bill.description,
+        bill.source,
+        bill.bill_date,
+        bill.bill_month,
+    )
+    .map_err(|e| to_user_message(&e))?;
 
     let service = app.state::<BillAppService>();
     let bill_id = service.save_bill_with_ocr(domain_bill, &image_path)?;

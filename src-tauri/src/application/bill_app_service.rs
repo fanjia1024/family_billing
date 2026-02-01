@@ -2,20 +2,27 @@ use crate::domain::entities::bill::{Bill, BillFilters, CreateBill, UpdateBill};
 use crate::domain::entities::ocr::{OcrDetailResult, OcrResult};
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::domain::ports::ocr_engine::OcrEngine;
+use crate::domain::ports::unit_of_work::UnitOfWork;
 use log::{debug, info};
 
 /// Application service for bill use cases.
-/// Depends only on domain ports (BillRepository, OcrEngine).
+/// Depends only on domain ports (BillRepository, OcrEngine, UnitOfWork).
 pub struct BillAppService {
     bill_repo: Box<dyn BillRepository>,
     ocr_engine: Box<dyn OcrEngine>,
+    uow: Box<dyn UnitOfWork>,
 }
 
 impl BillAppService {
-    pub fn new(bill_repo: Box<dyn BillRepository>, ocr_engine: Box<dyn OcrEngine>) -> Self {
+    pub fn new(
+        bill_repo: Box<dyn BillRepository>,
+        ocr_engine: Box<dyn OcrEngine>,
+        uow: Box<dyn UnitOfWork>,
+    ) -> Self {
         Self {
             bill_repo,
             ocr_engine,
+            uow,
         }
     }
 
@@ -39,7 +46,7 @@ impl BillAppService {
         self.bill_repo.delete(id)
     }
 
-    /// Save a bill and optionally attach an image with OCR raw text (single transaction).
+    /// Save a bill and optionally attach an image with OCR raw text (single transaction via UnitOfWork).
     pub fn save_bill_with_ocr(&self, bill: CreateBill, image_path: &str) -> Result<i64, String> {
         info!("[BillAppService] save_bill_with_ocr");
         let ocr_text = self
@@ -49,9 +56,11 @@ impl BillAppService {
             .map(|r| r.raw_text)
             .unwrap_or_default();
 
-        let bill_id = self
-            .bill_repo
-            .create_bill_with_image(&bill, image_path, &ocr_text)?;
+        let bill_id = self.uow.run_bill_with_image(|ctx| {
+            let id = ctx.create_bill(&bill)?;
+            ctx.create_bill_image(id, image_path, &ocr_text)?;
+            Ok(id)
+        })?;
         debug!("[BillAppService] bill created id={}", bill_id);
         Ok(bill_id)
     }

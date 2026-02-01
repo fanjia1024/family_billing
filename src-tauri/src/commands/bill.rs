@@ -3,6 +3,7 @@ use crate::commands::dto::bill::{
     BillDto, BillFiltersDto, CreateBillDto, UpdateBillDto,
 };
 use crate::domain::entities::bill::{BillFilters, CreateBill, UpdateBill};
+use crate::domain::error::{to_user_message, DomainError};
 use anyhow::Result;
 use log::{debug, info, warn};
 use tauri::AppHandle;
@@ -16,17 +17,18 @@ fn to_domain_filters(f: Option<BillFiltersDto>) -> Option<BillFilters> {
     })
 }
 
-fn to_domain_create_bill(b: &CreateBillDto) -> CreateBill {
-    CreateBill {
-        member_id: b.member_id,
-        category_id: b.category_id,
-        r#type: b.r#type.clone(),
-        amount: b.amount,
-        description: b.description.clone(),
-        source: b.source.clone(),
-        bill_date: b.bill_date.clone(),
-        bill_month: b.bill_month.clone(),
-    }
+fn to_domain_create_bill(b: &CreateBillDto) -> Result<CreateBill, String> {
+    CreateBill::try_new(
+        b.member_id,
+        b.category_id,
+        b.r#type.clone(),
+        b.amount,
+        b.description.clone(),
+        b.source.clone(),
+        b.bill_date.clone(),
+        b.bill_month.clone(),
+    )
+    .map_err(|e| to_user_message(&e))
 }
 
 fn to_domain_update_bill(b: &UpdateBillDto) -> UpdateBill {
@@ -75,36 +77,7 @@ pub fn create_bill(app: AppHandle, bill: CreateBillDto) -> Result<i64, String> {
     debug!("[create_bill] 账单数据: member_id={}, category_id={}, type={}, amount={}",
         bill.member_id, bill.category_id, bill.r#type, bill.amount);
 
-    if bill.member_id <= 0 {
-        warn!("[create_bill] 无效的成员ID: {}", bill.member_id);
-        return Err("无效的成员ID".to_string());
-    }
-    if bill.category_id <= 0 {
-        warn!("[create_bill] 无效的分类ID: {}", bill.category_id);
-        return Err("无效的分类ID".to_string());
-    }
-    if bill.amount <= 0.0 {
-        warn!("[create_bill] 无效的金额: {}", bill.amount);
-        return Err("金额必须大于0".to_string());
-    }
-    if bill.bill_date.is_empty() {
-        warn!("[create_bill] 账单日期为空");
-        return Err("账单日期不能为空".to_string());
-    }
-
-    let bill_month = if bill.bill_month.trim().is_empty() {
-        bill.bill_date.chars().take(7).collect::<String>()
-    } else {
-        bill.bill_month.clone()
-    };
-    if bill_month.len() != 7 || !bill_month.chars().nth(4).map(|c| c == '-').unwrap_or(false) {
-        warn!("[create_bill] 账单月份格式不正确: {}", bill_month);
-        return Err("账单月份格式必须为 YYYY-MM".to_string());
-    }
-
-    let mut domain_bill = to_domain_create_bill(&bill);
-    domain_bill.bill_month = bill_month;
-
+    let domain_bill = to_domain_create_bill(&bill)?;
     let service = app.state::<BillAppService>();
     let id = service.add_bill(domain_bill)?;
     info!("[create_bill] 账单创建成功, id={}", id);
@@ -117,8 +90,7 @@ pub fn update_bill(app: AppHandle, id: i64, bill: UpdateBillDto) -> Result<(), S
     debug!("[update_bill] 更新数据: {:?}", bill);
 
     if id <= 0 {
-        warn!("[update_bill] 无效的账单ID: {}", id);
-        return Err("无效的账单ID".to_string());
+        return Err(to_user_message(&DomainError::InvalidBillId));
     }
 
     let service = app.state::<BillAppService>();
@@ -130,8 +102,7 @@ pub fn delete_bill(app: AppHandle, id: i64) -> Result<(), String> {
     info!("[delete_bill] 开始删除账单, id={}", id);
 
     if id <= 0 {
-        warn!("[delete_bill] 无效的账单ID: {}", id);
-        return Err("无效的账单ID".to_string());
+        return Err(to_user_message(&DomainError::InvalidBillId));
     }
 
     let service = app.state::<BillAppService>();

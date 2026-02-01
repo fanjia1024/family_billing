@@ -1,14 +1,22 @@
 use crate::domain::entities::family::{CreateFamily, Family, UpdateFamily};
 use crate::domain::ports::family_repository::FamilyRepository;
+use crate::domain::services::family_validator::FamilyValidator;
 use log::info;
 
 pub struct FamilyAppService {
     family_repo: Box<dyn FamilyRepository>,
+    family_validator: Box<dyn FamilyValidator>,
 }
 
 impl FamilyAppService {
-    pub fn new(family_repo: Box<dyn FamilyRepository>) -> Self {
-        Self { family_repo }
+    pub fn new(
+        family_repo: Box<dyn FamilyRepository>,
+        family_validator: Box<dyn FamilyValidator>,
+    ) -> Self {
+        Self {
+            family_repo,
+            family_validator,
+        }
     }
 
     pub fn get_family(&self) -> Result<Option<Family>, String> {
@@ -18,9 +26,10 @@ impl FamilyAppService {
 
     pub fn create_family(&self, name: String) -> Result<i64, String> {
         info!("[FamilyAppService] create_family");
-        if self.family_repo.get_default()?.is_some() {
-            return Err("家庭已存在".to_string());
-        }
+        let existing = self.family_repo.get_default()?;
+        self.family_validator
+            .allow_create(existing.as_ref())
+            .map_err(|e| e.to_string())?;
         self.family_repo.create(&CreateFamily { name })
     }
 

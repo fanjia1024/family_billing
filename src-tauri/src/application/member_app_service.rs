@@ -4,12 +4,14 @@ use crate::domain::entities::member::{CreateMember, Member, UpdateMember};
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::domain::ports::family_repository::FamilyRepository;
 use crate::domain::ports::member_repository::MemberRepository;
+use crate::domain::services::deletion_policy::DeletionPolicy;
 use log::info;
 
 pub struct MemberAppService {
     member_repo: Box<dyn MemberRepository>,
     family_repo: Box<dyn FamilyRepository>,
     bill_repo: Box<dyn BillRepository>,
+    deletion_policy: Box<dyn DeletionPolicy>,
 }
 
 impl MemberAppService {
@@ -17,11 +19,13 @@ impl MemberAppService {
         member_repo: Box<dyn MemberRepository>,
         family_repo: Box<dyn FamilyRepository>,
         bill_repo: Box<dyn BillRepository>,
+        deletion_policy: Box<dyn DeletionPolicy>,
     ) -> Self {
         Self {
             member_repo,
             family_repo,
             bill_repo,
+            deletion_policy,
         }
     }
 
@@ -67,12 +71,9 @@ impl MemberAppService {
             start_date: None,
             end_date: None,
         }))?;
-        if !bills.is_empty() {
-            return Err(format!(
-                "该成员有 {} 条关联账单，请先删除账单",
-                bills.len()
-            ));
-        }
+        self.deletion_policy
+            .allow_delete(bills.len())
+            .map_err(|e| e.to_string())?;
         self.member_repo.delete(id)
     }
 }

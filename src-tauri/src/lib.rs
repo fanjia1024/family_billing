@@ -46,9 +46,13 @@ pub fn run() {
                 app_handle.clone(),
             ));
             let ocr_engine = Box::new(infrastructure::ocr::tesseract_engine::TesseractOcrEngine::new());
+            let uow = Box::new(infrastructure::persistence::sqlite_unit_of_work::SqliteUnitOfWork::new(
+                app_handle.clone(),
+            ));
             let bill_app_service = application::bill_app_service::BillAppService::new(
                 bill_repo,
                 ocr_engine,
+                uow,
             );
             app.manage(bill_app_service);
 
@@ -69,7 +73,11 @@ pub fn run() {
             let family_repo = Box::new(infrastructure::persistence::sqlite_family_repo::SqliteFamilyRepository::new(
                 app_handle.clone(),
             ));
-            let family_app_service = application::family_app_service::FamilyAppService::new(family_repo);
+            let family_validator = Box::new(domain::services::family_validator::DefaultFamilyValidator::new());
+            let family_app_service = application::family_app_service::FamilyAppService::new(
+                family_repo,
+                family_validator,
+            );
             app.manage(family_app_service);
 
             let member_repo = Box::new(infrastructure::persistence::sqlite_member_repo::SqliteMemberRepository::new(
@@ -81,10 +89,12 @@ pub fn run() {
             let bill_repo_member = Box::new(infrastructure::persistence::sqlite_bill_repo::SqliteBillRepository::new(
                 app_handle.clone(),
             ));
+            let member_deletion_policy = Box::new(domain::services::deletion_policy::DefaultDeletionPolicy::new());
             let member_app_service = application::member_app_service::MemberAppService::new(
                 member_repo,
                 family_repo_member,
                 bill_repo_member,
+                member_deletion_policy,
             );
             app.manage(member_app_service);
 
@@ -94,9 +104,13 @@ pub fn run() {
             let bill_repo_category = Box::new(infrastructure::persistence::sqlite_bill_repo::SqliteBillRepository::new(
                 app_handle.clone(),
             ));
+            let category_validator = Box::new(domain::services::category_validator::DefaultCategoryValidator::new());
+            let category_deletion_policy = Box::new(domain::services::deletion_policy::DefaultDeletionPolicy::new());
             let category_app_service = application::category_app_service::CategoryAppService::new(
                 category_repo,
                 bill_repo_category,
+                category_validator,
+                category_deletion_policy,
             );
             app.manage(category_app_service);
 
