@@ -1,5 +1,6 @@
 use crate::domain::entities::bill::CreateBill;
 use crate::domain::error::DomainError;
+use crate::domain::ports::import_context::ImportTransactionContext;
 
 /// Context for bill + bill_image operations within a single transaction.
 /// Implemented by Infrastructure (e.g. SqliteBillTransactionContext).
@@ -19,4 +20,9 @@ pub trait UnitOfWork: Send + Sync {
     fn run_bill_with_image<F, T>(&self, f: F) -> Result<T, DomainError>
     where
         F: FnOnce(&mut dyn BillTransactionContext) -> Result<T, DomainError>;
+
+    /// Run import (families → members → categories → bills → bill_images) in a single transaction.
+    fn run_import<F, T>(&self, f: F) -> Result<T, DomainError>
+    where
+        F: FnOnce(&mut dyn ImportTransactionContext) -> Result<T, DomainError>;
 }

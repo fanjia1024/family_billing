@@ -679,7 +679,7 @@ const handleOcrUpload = async (file: any) => {
         }
       } catch (error) {
         console.error('OCR error:', error)
-        showToast('OCR识别失败: ' + (error as Error).message)
+        showToast(formatErrorMessage(error, 'OCR识别失败'))
       }
     }
     
@@ -778,23 +778,26 @@ const handleBatchAddBills = async () => {
   
   let successCount = 0
   let failCount = 0
-  
+  let lastErrorMessage = ''
+
+  const selectedIndices = ocrBatchResult.value.items
+    .map((_, i) => i)
+    .filter(i => ocrItemSelections.value[i])
+  const singleItemWithImage = selectedIndices.length === 1 && currentImagePath.value
+
   showToast('正在添加账单...')
-  
+
   for (let i = 0; i < ocrBatchResult.value.items.length; i++) {
     if (!ocrItemSelections.value[i]) continue
-    
+
     const item = ocrBatchResult.value.items[i]
-    
-    // 根据分类名称查找分类 ID
+
     let category = billStore.categories.find(c => c.name === item.category)
     if (!category) {
-      // 如果没有找到匹配的分类，使用默认分类
       category = billStore.categories.find(c => c.type === item.bill_type) || billStore.categories[0]
     }
-    
-    // 使用用户选择的月份，如果没有则从OCR结果或日期中提取
-    const billMonth = ocrBillMonth.value || 
+
+    const billMonth = ocrBillMonth.value ||
       (ocrBatchResult.value.bill_month && ocrBatchResult.value.bill_month.length >= 7
         ? ocrBatchResult.value.bill_month.slice(0, 7)
         : ocrBatchResult.value.bill_date.slice(0, 7))
@@ -809,23 +812,28 @@ const handleBatchAddBills = async () => {
       bill_date: ocrBatchResult.value.bill_date,
       bill_month: billMonth
     }
-    
+
     try {
-      await billStore.createBill(bill)
+      if (singleItemWithImage && currentImagePath.value) {
+        await ocrApi.saveBillWithImage(bill, currentImagePath.value)
+      } else {
+        await billStore.createBill(bill)
+      }
       successCount++
     } catch (error) {
       console.error('Failed to add bill:', error)
       failCount++
+      lastErrorMessage = formatErrorMessage(error, '保存账单失败')
     }
   }
-  
+
   if (successCount > 0) {
     showToast(`成功添加 ${successCount} 条账单${failCount > 0 ? `，${failCount} 条失败` : ''}`)
     showOcrDialog.value = false
     resetOcrDialog()
     await loadBills()
   } else {
-    showToast('添加失败')
+    showToast(lastErrorMessage || '添加失败')
   }
 }
 

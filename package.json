@@ -9,7 +9,13 @@
     "preview": "vite preview",
     "tauri": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH tauri",
     "tauri:dev": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH tauri dev",
-    "tauri:build": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH tauri build"
+    "tauri:build": "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH tauri build",
+    "tauri:android:init": "tauri android init",
+    "tauri:ios:init": "tauri ios init",
+    "tauri:android:dev": "tauri android dev",
+    "tauri:ios:dev": "tauri ios dev",
+    "tauri:android:build": "tauri android build",
+    "tauri:ios:build": "tauri ios build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",

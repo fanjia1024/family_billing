@@ -134,6 +134,14 @@ pub fn run() {
             );
             app.manage(export_app_service);
 
+            let uow_import = Box::new(infrastructure::persistence::sqlite_unit_of_work::SqliteUnitOfWork::new(
+                app_handle.clone(),
+            ));
+            let import_app_service = application::import_app_service::ImportAppService::new(
+                uow_import,
+            );
+            app.manage(import_app_service);
+
             info!("应用初始化完成");
             Ok(())
         })

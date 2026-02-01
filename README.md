@@ -91,12 +91,12 @@ npm install
 # 桌面端开发
 npm run tauri:dev
 
-# 移动端开发（需要先初始化）
-npm run tauri android init  # Android
-npm run tauri ios init     # iOS
+# 移动端开发（需要先完成下方「移动端适配」环境并初始化）
+npm run tauri:android:init  # Android（需已安装 Android Studio / 命令行工具）
+npm run tauri:ios:init      # iOS（需已安装 Xcode；init 会安装 xcodegen、libimobiledevice 等）
 
-npm run tauri android dev  # Android 开发
-npm run tauri ios dev      # iOS 开发
+npm run tauri:android:dev   # Android 开发
+npm run tauri:ios:dev       # iOS 开发
 ```
 
 ## 构建
@@ -105,10 +105,30 @@ npm run tauri ios dev      # iOS 开发
 # 构建桌面端应用
 npm run tauri:build
 
-# 构建移动端应用
-npm run tauri android build
-npm run tauri ios build
+# 构建移动端应用（需先执行对应平台的 init）
+npm run tauri:android:build
+npm run tauri:ios:build
 ```
+
+## 移动端适配
+
+按 Tauri 文档完成 Android / iOS 初始化与构建：
+
+1. **环境准备**
+   - **Android**：安装 [Android Studio](https://developer.android.com/studio) 或至少 [命令行工具](https://developer.android.com/studio#command-tools)，并设置 `ANDROID_HOME`（或由 Tauri 自动检测）。
+   - **iOS**：安装 Xcode；首次 `tauri ios init` 会通过 Homebrew 安装 `xcodegen`、`libimobiledevice` 等（需网络与 brew 可用）。真机调试需在 `tauri.conf.json` 的 `bundle > iOS` 中配置 `developmentTeam` 或设置环境变量 `APPLE_DEVELOPMENT_TEAM`。
+
+2. **初始化与跑通 build**
+   ```bash
+   # 若在 CI 中运行 init，可加 CI=false 避免 --ci 参数问题
+   npm run tauri:android:init   # 生成 Android 工程
+   npm run tauri:ios:init      # 生成 iOS 工程（会安装 Rust 移动端 target 与部分 brew 依赖）
+
+   npm run tauri:android:build # 构建 Android 安装包
+   npm run tauri:ios:build     # 构建 iOS 应用
+   ```
+
+3. **前端**：项目已使用 Vant，适合移动端；如需可再调整安全区、底部导航触摸区域、列表滚动等。
 
 ## 项目结构
 
