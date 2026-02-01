@@ -2,7 +2,6 @@ mod application;
 mod commands;
 mod domain;
 mod infrastructure;
-mod models;
 mod services;
 mod utils;
 
@@ -52,6 +51,74 @@ pub fn run() {
                 ocr_engine,
             );
             app.manage(bill_app_service);
+
+            let bill_repo_stats = Box::new(infrastructure::persistence::sqlite_bill_repo::SqliteBillRepository::new(
+                app_handle.clone(),
+            ));
+            let category_repo_stats = Box::new(infrastructure::persistence::sqlite_category_repo::SqliteCategoryRepository::new(
+                app_handle.clone(),
+            ));
+            let statistics_calculator = Box::new(domain::services::statistics_calculator::DefaultStatisticsCalculator::new());
+            let statistics_app_service = application::statistics_app_service::StatisticsAppService::new(
+                bill_repo_stats,
+                category_repo_stats,
+                statistics_calculator,
+            );
+            app.manage(statistics_app_service);
+
+            let family_repo = Box::new(infrastructure::persistence::sqlite_family_repo::SqliteFamilyRepository::new(
+                app_handle.clone(),
+            ));
+            let family_app_service = application::family_app_service::FamilyAppService::new(family_repo);
+            app.manage(family_app_service);
+
+            let member_repo = Box::new(infrastructure::persistence::sqlite_member_repo::SqliteMemberRepository::new(
+                app_handle.clone(),
+            ));
+            let family_repo_member = Box::new(infrastructure::persistence::sqlite_family_repo::SqliteFamilyRepository::new(
+                app_handle.clone(),
+            ));
+            let bill_repo_member = Box::new(infrastructure::persistence::sqlite_bill_repo::SqliteBillRepository::new(
+                app_handle.clone(),
+            ));
+            let member_app_service = application::member_app_service::MemberAppService::new(
+                member_repo,
+                family_repo_member,
+                bill_repo_member,
+            );
+            app.manage(member_app_service);
+
+            let category_repo = Box::new(infrastructure::persistence::sqlite_category_repo::SqliteCategoryRepository::new(
+                app_handle.clone(),
+            ));
+            let bill_repo_category = Box::new(infrastructure::persistence::sqlite_bill_repo::SqliteBillRepository::new(
+                app_handle.clone(),
+            ));
+            let category_app_service = application::category_app_service::CategoryAppService::new(
+                category_repo,
+                bill_repo_category,
+            );
+            app.manage(category_app_service);
+
+            let family_repo_export = Box::new(infrastructure::persistence::sqlite_family_repo::SqliteFamilyRepository::new(
+                app_handle.clone(),
+            ));
+            let member_repo_export = Box::new(infrastructure::persistence::sqlite_member_repo::SqliteMemberRepository::new(
+                app_handle.clone(),
+            ));
+            let category_repo_export = Box::new(infrastructure::persistence::sqlite_category_repo::SqliteCategoryRepository::new(
+                app_handle.clone(),
+            ));
+            let bill_repo_export = Box::new(infrastructure::persistence::sqlite_bill_repo::SqliteBillRepository::new(
+                app_handle.clone(),
+            ));
+            let export_app_service = application::export_app_service::ExportAppService::new(
+                family_repo_export,
+                member_repo_export,
+                category_repo_export,
+                bill_repo_export,
+            );
+            app.manage(export_app_service);
 
             info!("应用初始化完成");
             Ok(())

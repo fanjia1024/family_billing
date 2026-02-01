@@ -39,12 +39,9 @@ impl BillAppService {
         self.bill_repo.delete(id)
     }
 
-    /// Save a bill and optionally attach an image with OCR raw text.
+    /// Save a bill and optionally attach an image with OCR raw text (single transaction).
     pub fn save_bill_with_ocr(&self, bill: CreateBill, image_path: &str) -> Result<i64, String> {
         info!("[BillAppService] save_bill_with_ocr");
-        let bill_id = self.bill_repo.create(&bill)?;
-        debug!("[BillAppService] bill created id={}", bill_id);
-
         let ocr_text = self
             .ocr_engine
             .recognize_image(image_path)
@@ -52,8 +49,10 @@ impl BillAppService {
             .map(|r| r.raw_text)
             .unwrap_or_default();
 
-        self.bill_repo
-            .create_bill_image(bill_id, image_path, &ocr_text)?;
+        let bill_id = self
+            .bill_repo
+            .create_bill_with_image(&bill, image_path, &ocr_text)?;
+        debug!("[BillAppService] bill created id={}", bill_id);
         Ok(bill_id)
     }
 

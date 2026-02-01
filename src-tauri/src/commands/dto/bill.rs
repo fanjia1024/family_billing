@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Bill {
+pub struct BillDto {
     pub id: i64,
     pub member_id: i64,
     pub category_id: i64,
@@ -15,7 +15,7 @@ pub struct Bill {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CreateBill {
+pub struct CreateBillDto {
     pub member_id: i64,
     pub category_id: i64,
     pub r#type: String,
@@ -27,7 +27,7 @@ pub struct CreateBill {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct UpdateBill {
+pub struct UpdateBillDto {
     pub member_id: Option<i64>,
     pub category_id: Option<i64>,
     pub r#type: Option<String>,
@@ -38,10 +38,9 @@ pub struct UpdateBill {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BillFilters {
+pub struct BillFiltersDto {
     pub member_id: Option<i64>,
     pub category_id: Option<i64>,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
 }
-

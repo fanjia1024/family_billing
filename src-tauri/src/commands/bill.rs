@@ -1,12 +1,14 @@
 use crate::application::bill_app_service::BillAppService;
-use crate::domain::entities::bill::{BillFilters as DomainFilters, CreateBill as DomainCreateBill, UpdateBill as DomainUpdateBill};
-use crate::models::bill::{Bill, BillFilters, CreateBill, UpdateBill};
+use crate::commands::dto::bill::{
+    BillDto, BillFiltersDto, CreateBillDto, UpdateBillDto,
+};
+use crate::domain::entities::bill::{BillFilters, CreateBill, UpdateBill};
 use anyhow::Result;
 use log::{debug, info, warn};
 use tauri::AppHandle;
 
-fn to_domain_filters(f: Option<BillFilters>) -> Option<DomainFilters> {
-    f.map(|f| DomainFilters {
+fn to_domain_filters(f: Option<BillFiltersDto>) -> Option<BillFilters> {
+    f.map(|f| BillFilters {
         member_id: f.member_id,
         category_id: f.category_id,
         start_date: f.start_date,
@@ -14,8 +16,8 @@ fn to_domain_filters(f: Option<BillFilters>) -> Option<DomainFilters> {
     })
 }
 
-fn to_domain_create_bill(b: &CreateBill) -> DomainCreateBill {
-    DomainCreateBill {
+fn to_domain_create_bill(b: &CreateBillDto) -> CreateBill {
+    CreateBill {
         member_id: b.member_id,
         category_id: b.category_id,
         r#type: b.r#type.clone(),
@@ -27,8 +29,8 @@ fn to_domain_create_bill(b: &CreateBill) -> DomainCreateBill {
     }
 }
 
-fn to_domain_update_bill(b: &UpdateBill) -> DomainUpdateBill {
-    DomainUpdateBill {
+fn to_domain_update_bill(b: &UpdateBillDto) -> UpdateBill {
+    UpdateBill {
         member_id: b.member_id,
         category_id: b.category_id,
         r#type: b.r#type.clone(),
@@ -39,8 +41,8 @@ fn to_domain_update_bill(b: &UpdateBill) -> DomainUpdateBill {
     }
 }
 
-fn to_dto_bill(b: &crate::domain::entities::bill::Bill) -> Bill {
-    Bill {
+fn to_dto_bill(b: &crate::domain::entities::bill::Bill) -> BillDto {
+    BillDto {
         id: b.id,
         member_id: b.member_id,
         category_id: b.category_id,
@@ -55,7 +57,7 @@ fn to_dto_bill(b: &crate::domain::entities::bill::Bill) -> Bill {
 }
 
 #[tauri::command]
-pub fn get_bills(app: AppHandle, filters: Option<BillFilters>) -> Result<Vec<Bill>, String> {
+pub fn get_bills(app: AppHandle, filters: Option<BillFiltersDto>) -> Result<Vec<BillDto>, String> {
     info!("[get_bills] 开始获取账单列表");
     debug!("[get_bills] 筛选条件: {:?}", filters);
 
@@ -68,7 +70,7 @@ pub fn get_bills(app: AppHandle, filters: Option<BillFilters>) -> Result<Vec<Bil
 }
 
 #[tauri::command]
-pub fn create_bill(app: AppHandle, bill: CreateBill) -> Result<i64, String> {
+pub fn create_bill(app: AppHandle, bill: CreateBillDto) -> Result<i64, String> {
     info!("[create_bill] 开始创建账单");
     debug!("[create_bill] 账单数据: member_id={}, category_id={}, type={}, amount={}",
         bill.member_id, bill.category_id, bill.r#type, bill.amount);
@@ -110,7 +112,7 @@ pub fn create_bill(app: AppHandle, bill: CreateBill) -> Result<i64, String> {
 }
 
 #[tauri::command]
-pub fn update_bill(app: AppHandle, id: i64, bill: UpdateBill) -> Result<(), String> {
+pub fn update_bill(app: AppHandle, id: i64, bill: UpdateBillDto) -> Result<(), String> {
     info!("[update_bill] 开始更新账单, id={}", id);
     debug!("[update_bill] 更新数据: {:?}", bill);
 

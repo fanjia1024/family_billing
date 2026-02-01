@@ -1,1 +1,1 @@
-// Domain services (e.g. StatisticsCalculator) can be added here later.
+pub mod statistics_calculator;

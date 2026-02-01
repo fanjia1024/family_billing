@@ -1,5 +1,5 @@
 use crate::application::bill_app_service::BillAppService;
-use crate::models::bill::CreateBill;
+use crate::commands::dto::bill::CreateBillDto;
 use anyhow::Result;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -112,7 +112,7 @@ pub fn ocr_recognize_batch(app: AppHandle, image_path: String) -> Result<OcrBatc
 #[tauri::command]
 pub fn save_bill_with_image(
     app: AppHandle,
-    bill: CreateBill,
+    bill: CreateBillDto,
     image_path: String,
 ) -> Result<i64, String> {
     info!("[save_bill_with_image] 开始保存账单和图片");
