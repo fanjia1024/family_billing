@@ -1,6 +1,7 @@
 use crate::domain::entities::bill::BillFilters;
 use crate::domain::entities::family::CreateFamily;
 use crate::domain::entities::member::{CreateMember, Member, UpdateMember};
+use crate::domain::error::DomainError;
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::domain::ports::family_repository::FamilyRepository;
 use crate::domain::ports::member_repository::MemberRepository;
@@ -29,7 +30,7 @@ impl MemberAppService {
         }
     }
 
-    pub fn get_members(&self) -> Result<Vec<Member>, String> {
+    pub fn get_members(&self) -> Result<Vec<Member>, DomainError> {
         info!("[MemberAppService] get_members");
         self.member_repo.list()
     }
@@ -39,7 +40,7 @@ impl MemberAppService {
         name: String,
         role: String,
         avatar: Option<String>,
-    ) -> Result<i64, String> {
+    ) -> Result<i64, DomainError> {
         info!("[MemberAppService] create_member");
         let family_id = match self.family_repo.get_default()? {
             Some(f) => f.id,
@@ -57,13 +58,13 @@ impl MemberAppService {
         name: String,
         role: String,
         avatar: Option<String>,
-    ) -> Result<(), String> {
+    ) -> Result<(), DomainError> {
         info!("[MemberAppService] update_member id={}", id);
         self.member_repo
             .update(id, &UpdateMember { id, name, role, avatar })
     }
 
-    pub fn delete_member(&self, id: i64) -> Result<(), String> {
+    pub fn delete_member(&self, id: i64) -> Result<(), DomainError> {
         info!("[MemberAppService] delete_member id={}", id);
         let bills = self.bill_repo.list_with_filters(Some(BillFilters {
             member_id: Some(id),
@@ -71,9 +72,7 @@ impl MemberAppService {
             start_date: None,
             end_date: None,
         }))?;
-        self.deletion_policy
-            .allow_delete(bills.len())
-            .map_err(|e| e.to_string())?;
+        self.deletion_policy.allow_delete(bills.len())?;
         self.member_repo.delete(id)
     }
 }

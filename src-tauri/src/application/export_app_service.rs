@@ -1,3 +1,4 @@
+use crate::domain::error::DomainError;
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::domain::ports::category_repository::CategoryRepository;
 use crate::domain::ports::family_repository::FamilyRepository;
@@ -27,7 +28,7 @@ impl ExportAppService {
         }
     }
 
-    pub fn export_to_json(&self, file_path: &str) -> Result<(), String> {
+    pub fn export_to_json(&self, file_path: &str) -> Result<(), DomainError> {
         info!("[ExportAppService] export_to_json");
 
         let mut export_data = serde_json::Map::new();
@@ -116,8 +117,9 @@ impl ExportAppService {
         export_data.insert("bill_images".to_string(), serde_json::Value::Array(bill_images));
 
         let json = serde_json::to_string_pretty(&export_data)
-            .map_err(|e| format!("JSON序列化失败: {}", e))?;
-        fs::write(file_path, json).map_err(|e| format!("文件写入失败: {}", e))?;
+            .map_err(|e| DomainError::PersistenceError(format!("JSON序列化失败: {}", e)))?;
+        fs::write(file_path, json)
+            .map_err(|e| DomainError::PersistenceError(format!("文件写入失败: {}", e)))?;
 
         info!("[ExportAppService] 导出成功: {}", file_path);
         Ok(())

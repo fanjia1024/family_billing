@@ -1,4 +1,5 @@
 use crate::domain::entities::bill::BillFilters;
+use crate::domain::error::DomainError;
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::domain::ports::category_repository::CategoryRepository;
 use crate::domain::services::statistics_calculator::{CategoryStat, StatisticsCalculator};
@@ -50,7 +51,7 @@ impl StatisticsAppService {
         &self,
         start_date: Option<String>,
         end_date: Option<String>,
-    ) -> Result<StatisticsResult, String> {
+    ) -> Result<StatisticsResult, DomainError> {
         info!("[StatisticsAppService] get_statistics");
 
         let filters = Some(BillFilters {

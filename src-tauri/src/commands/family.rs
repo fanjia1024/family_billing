@@ -1,5 +1,6 @@
 use crate::application::family_app_service::FamilyAppService;
 use crate::commands::dto::family::FamilyDto;
+use crate::domain::error::to_user_message;
 use anyhow::Result;
 use log::{debug, info, warn};
 use tauri::AppHandle;
@@ -9,7 +10,7 @@ pub fn get_family(app: AppHandle) -> Result<Option<FamilyDto>, String> {
     info!("[get_family] 开始获取家庭信息");
 
     let service = app.state::<FamilyAppService>();
-    let family = service.get_family()?;
+    let family = service.get_family().map_err(|e| to_user_message(&e))?;
     let dto = family.map(|f| FamilyDto {
         id: f.id,
         name: f.name,
@@ -33,7 +34,7 @@ pub fn create_family(app: AppHandle, name: String) -> Result<i64, String> {
     }
 
     let service = app.state::<FamilyAppService>();
-    let id = service.create_family(name)?;
+    let id = service.create_family(name).map_err(|e| to_user_message(&e))?;
     info!("[create_family] 家庭创建成功, id={}", id);
     Ok(id)
 }
@@ -52,7 +53,9 @@ pub fn update_family(app: AppHandle, id: i64, name: String) -> Result<(), String
     }
 
     let service = app.state::<FamilyAppService>();
-    service.update_family(id, name)?;
+    service
+        .update_family(id, name)
+        .map_err(|e| to_user_message(&e))?;
     info!("[update_family] 家庭更新成功, id={}", id);
     Ok(())
 }

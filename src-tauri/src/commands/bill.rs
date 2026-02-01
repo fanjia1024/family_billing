@@ -64,7 +64,9 @@ pub fn get_bills(app: AppHandle, filters: Option<BillFiltersDto>) -> Result<Vec<
     debug!("[get_bills] 筛选条件: {:?}", filters);
 
     let service = app.state::<BillAppService>();
-    let domain_bills = service.get_bills(to_domain_filters(filters))?;
+    let domain_bills = service
+        .get_bills(to_domain_filters(filters))
+        .map_err(|e| to_user_message(&e))?;
     let bills = domain_bills.iter().map(to_dto_bill).collect();
 
     info!("[get_bills] 成功获取 {} 条账单记录", bills.len());
@@ -79,7 +81,7 @@ pub fn create_bill(app: AppHandle, bill: CreateBillDto) -> Result<i64, String> {
 
     let domain_bill = to_domain_create_bill(&bill)?;
     let service = app.state::<BillAppService>();
-    let id = service.add_bill(domain_bill)?;
+    let id = service.add_bill(domain_bill).map_err(|e| to_user_message(&e))?;
     info!("[create_bill] 账单创建成功, id={}", id);
     Ok(id)
 }
@@ -94,7 +96,9 @@ pub fn update_bill(app: AppHandle, id: i64, bill: UpdateBillDto) -> Result<(), S
     }
 
     let service = app.state::<BillAppService>();
-    service.update_bill(id, to_domain_update_bill(&bill))
+    service
+        .update_bill(id, to_domain_update_bill(&bill))
+        .map_err(|e| to_user_message(&e))
 }
 
 #[tauri::command]
@@ -106,5 +110,5 @@ pub fn delete_bill(app: AppHandle, id: i64) -> Result<(), String> {
     }
 
     let service = app.state::<BillAppService>();
-    service.delete_bill(id)
+    service.delete_bill(id).map_err(|e| to_user_message(&e))
 }

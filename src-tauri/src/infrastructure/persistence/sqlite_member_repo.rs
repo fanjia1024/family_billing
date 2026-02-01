@@ -1,9 +1,14 @@
 use crate::domain::entities::member::{CreateMember, Member, UpdateMember};
+use crate::domain::error::DomainError;
 use crate::domain::ports::member_repository::MemberRepository;
 use crate::infrastructure::persistence::database;
 use log::error;
 use rusqlite::params;
 use tauri::AppHandle;
+
+fn to_persistence(e: impl std::fmt::Display) -> DomainError {
+    DomainError::PersistenceError(e.to_string())
+}
 
 pub struct SqliteMemberRepository {
     app: AppHandle,
@@ -16,17 +21,17 @@ impl SqliteMemberRepository {
 }
 
 impl MemberRepository for SqliteMemberRepository {
-    fn list(&self) -> Result<Vec<Member>, String> {
+    fn list(&self) -> Result<Vec<Member>, DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteMemberRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let rows = conn
             .prepare("SELECT id, family_id, name, avatar, role, created_at FROM member ORDER BY created_at")
             .map_err(|e| {
                 error!("[SqliteMemberRepository] SQL准备失败: {}", e);
-                e.to_string()
+                to_persistence(e)
             })?
             .query_map([], |row| {
                 Ok(Member {
@@ -40,21 +45,21 @@ impl MemberRepository for SqliteMemberRepository {
             })
             .map_err(|e| {
                 error!("[SqliteMemberRepository] 查询失败: {}", e);
-                e.to_string()
+                to_persistence(e)
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 error!("[SqliteMemberRepository] 解析失败: {}", e);
-                e.to_string()
+                to_persistence(e)
             })?;
 
         Ok(rows)
     }
 
-    fn create(&self, family_id: i64, c: &CreateMember) -> Result<i64, String> {
+    fn create(&self, family_id: i64, c: &CreateMember) -> Result<i64, DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteMemberRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         conn.execute(
@@ -63,16 +68,16 @@ impl MemberRepository for SqliteMemberRepository {
         )
         .map_err(|e| {
             error!("[SqliteMemberRepository] INSERT失败: {}", e);
-            format!("创建成员失败: {}", e)
+            to_persistence(e)
         })?;
 
         Ok(conn.last_insert_rowid())
     }
 
-    fn update(&self, id: i64, c: &UpdateMember) -> Result<(), String> {
+    fn update(&self, id: i64, c: &UpdateMember) -> Result<(), DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteMemberRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let affected = conn
@@ -82,30 +87,30 @@ impl MemberRepository for SqliteMemberRepository {
             )
             .map_err(|e| {
                 error!("[SqliteMemberRepository] UPDATE失败: {}", e);
-                format!("更新成员失败: {}", e)
+                to_persistence(e)
             })?;
 
         if affected == 0 {
-            return Err("成员不存在".to_string());
+            return Err(DomainError::NotFound("成员不存在".to_string()));
         }
         Ok(())
     }
 
-    fn delete(&self, id: i64) -> Result<(), String> {
+    fn delete(&self, id: i64) -> Result<(), DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteMemberRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let affected = conn
             .execute("DELETE FROM member WHERE id = ?1", params![id])
             .map_err(|e| {
                 error!("[SqliteMemberRepository] DELETE失败: {}", e);
-                format!("删除成员失败: {}", e)
+                to_persistence(e)
             })?;
 
         if affected == 0 {
-            return Err("成员不存在".to_string());
+            return Err(DomainError::NotFound("成员不存在".to_string()));
         }
         Ok(())
     }

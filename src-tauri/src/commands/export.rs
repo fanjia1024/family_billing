@@ -1,4 +1,5 @@
 use crate::application::export_app_service::ExportAppService;
+use crate::domain::error::to_user_message;
 use crate::services::database;
 use log::{debug, error, info, warn};
 use serde_json;
@@ -15,7 +16,9 @@ pub fn export_to_json(app: AppHandle, file_path: String) -> Result<(), String> {
     }
 
     let service = app.state::<ExportAppService>();
-    service.export_to_json(&file_path)?;
+    service
+        .export_to_json(&file_path)
+        .map_err(|e| to_user_message(&e))?;
 
     info!("[export_to_json] 数据导出成功: {}", file_path);
     Ok(())

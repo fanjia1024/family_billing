@@ -1,5 +1,6 @@
 use crate::domain::entities::bill::{Bill, BillFilters, CreateBill, UpdateBill};
 use crate::domain::entities::ocr::{OcrDetailResult, OcrResult};
+use crate::domain::error::DomainError;
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::domain::ports::ocr_engine::OcrEngine;
 use crate::domain::ports::unit_of_work::UnitOfWork;
@@ -26,28 +27,28 @@ impl BillAppService {
         }
     }
 
-    pub fn get_bills(&self, filters: Option<BillFilters>) -> Result<Vec<Bill>, String> {
+    pub fn get_bills(&self, filters: Option<BillFilters>) -> Result<Vec<Bill>, DomainError> {
         info!("[BillAppService] get_bills");
         self.bill_repo.list_with_filters(filters)
     }
 
-    pub fn add_bill(&self, bill: CreateBill) -> Result<i64, String> {
+    pub fn add_bill(&self, bill: CreateBill) -> Result<i64, DomainError> {
         info!("[BillAppService] add_bill");
         self.bill_repo.create(&bill)
     }
 
-    pub fn update_bill(&self, id: i64, bill: UpdateBill) -> Result<(), String> {
+    pub fn update_bill(&self, id: i64, bill: UpdateBill) -> Result<(), DomainError> {
         info!("[BillAppService] update_bill id={}", id);
         self.bill_repo.update(id, &bill)
     }
 
-    pub fn delete_bill(&self, id: i64) -> Result<(), String> {
+    pub fn delete_bill(&self, id: i64) -> Result<(), DomainError> {
         info!("[BillAppService] delete_bill id={}", id);
         self.bill_repo.delete(id)
     }
 
     /// Save a bill and optionally attach an image with OCR raw text (single transaction via UnitOfWork).
-    pub fn save_bill_with_ocr(&self, bill: CreateBill, image_path: &str) -> Result<i64, String> {
+    pub fn save_bill_with_ocr(&self, bill: CreateBill, image_path: &str) -> Result<i64, DomainError> {
         info!("[BillAppService] save_bill_with_ocr");
         let ocr_text = self
             .ocr_engine
@@ -65,12 +66,12 @@ impl BillAppService {
         Ok(bill_id)
     }
 
-    pub fn recognize_image(&self, image_path: &str) -> Result<OcrResult, String> {
+    pub fn recognize_image(&self, image_path: &str) -> Result<OcrResult, DomainError> {
         info!("[BillAppService] recognize_image");
         self.ocr_engine.recognize_image(image_path)
     }
 
-    pub fn recognize_bill_details(&self, image_path: &str) -> Result<OcrDetailResult, String> {
+    pub fn recognize_bill_details(&self, image_path: &str) -> Result<OcrDetailResult, DomainError> {
         info!("[BillAppService] recognize_bill_details");
         self.ocr_engine.recognize_bill_details(image_path)
     }

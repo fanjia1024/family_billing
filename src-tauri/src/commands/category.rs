@@ -1,5 +1,6 @@
 use crate::application::category_app_service::CategoryAppService;
 use crate::commands::dto::category::CategoryDto;
+use crate::domain::error::to_user_message;
 use anyhow::Result;
 use log::{debug, info, warn};
 use tauri::AppHandle;
@@ -9,7 +10,7 @@ pub fn get_categories(app: AppHandle) -> Result<Vec<CategoryDto>, String> {
     info!("[get_categories] 开始获取分类列表");
 
     let service = app.state::<CategoryAppService>();
-    let categories = service.get_categories()?;
+    let categories = service.get_categories().map_err(|e| to_user_message(&e))?;
     let dtos: Vec<CategoryDto> = categories
         .into_iter()
         .map(|c| CategoryDto {
@@ -46,7 +47,9 @@ pub fn create_category(
     }
 
     let service = app.state::<CategoryAppService>();
-    let id = service.create_category(name, r#type, icon)?;
+    let id = service
+        .create_category(name, r#type, icon)
+        .map_err(|e| to_user_message(&e))?;
     info!("[create_category] 分类创建成功, id={}", id);
     Ok(id)
 }
@@ -70,7 +73,9 @@ pub fn update_category(
     }
 
     let service = app.state::<CategoryAppService>();
-    service.update_category(id, name, icon)?;
+    service
+        .update_category(id, name, icon)
+        .map_err(|e| to_user_message(&e))?;
     info!("[update_category] 分类更新成功, id={}", id);
     Ok(())
 }
@@ -85,7 +90,9 @@ pub fn delete_category(app: AppHandle, id: i64) -> Result<(), String> {
     }
 
     let service = app.state::<CategoryAppService>();
-    service.delete_category(id)?;
+    service
+        .delete_category(id)
+        .map_err(|e| to_user_message(&e))?;
     info!("[delete_category] 分类删除成功, id={}", id);
     Ok(())
 }

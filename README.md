@@ -122,13 +122,30 @@ Household_Billing_Expense_Management_System/
 │   └── types/             # TypeScript 类型定义
 ├── src-tauri/             # Rust 后端
 │   ├── src/
-│   │   ├── commands/      # Tauri 命令
-│   │   ├── models/        # 数据模型
-│   │   ├── services/      # 业务逻辑
-│   │   └── utils/         # 工具函数
+│   │   ├── commands/      # Tauri 命令入口，DTO 与调用 Application
+│   │   ├── application/   # 应用服务（用例编排）
+│   │   ├── domain/        # 实体、值对象、领域服务、端口
+│   │   ├── infrastructure/# SQLite 持久化、OCR 实现等
+│   │   ├── services/      # 遗留（database 等再导出，后续可收口）
+│   │   └── utils/         # 通用工具
 │   └── Cargo.toml
 └── package.json
 ```
+
+## Architecture（后端分层）
+
+后端采用分层架构，依赖方向为：Commands → Application → Domain；Infrastructure 实现 Domain 的端口。
+
+- **Commands**：只做 DTO 转换与调用 Application，不包含业务规则；将 DomainError 映射为前端可读文案（如 `to_user_message`）。
+- **Application**：只做编排（调 Domain 服务 + 端口），不做校验与策略选择；校验器、删除策略等在 bootstrap（lib.rs）注入。
+- **Domain**：规则的唯一真相源。实体与值对象（如 `CreateBill::try_new`、Money、BillDate）负责创建侧校验；领域服务（FamilyValidator、CategoryValidator、DeletionPolicy、StatisticsCalculator）负责业务规则；端口（Repository、UnitOfWork、OcrEngine、ExpenseAnalyzer）定义持久化与外部能力接口。
+- **Infrastructure**：实现 Domain 的端口（Sqlite*Repository、SqliteUnitOfWork、TesseractOcrEngine 等）；Repository 仅做存取，无统计/汇总语义。
+
+**事务**：多步写（如「账单 + 图片」）通过 UnitOfWork（`run_bill_with_image`）在同一事务内完成；OCR 在 UoW 外执行，失败不会落库。删除成员/分类为单步写（先查账单数 → 策略 → delete）。
+
+**错误**：Domain 使用 `DomainError`；Command 层将错误映射为用户可见文案。
+
+整体为 Local-first、AI-ready：ExpenseAnalyzer 端口已预留，便于后续接入规则或 LLM 实现。
 
 ## 数据库结构
 

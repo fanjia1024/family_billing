@@ -1,5 +1,6 @@
 use crate::application::member_app_service::MemberAppService;
 use crate::commands::dto::member::MemberDto;
+use crate::domain::error::to_user_message;
 use anyhow::Result;
 use log::{debug, info, warn};
 use tauri::AppHandle;
@@ -9,7 +10,7 @@ pub fn get_members(app: AppHandle) -> Result<Vec<MemberDto>, String> {
     info!("[get_members] 开始获取成员列表");
 
     let service = app.state::<MemberAppService>();
-    let members = service.get_members()?;
+    let members = service.get_members().map_err(|e| to_user_message(&e))?;
     let dtos: Vec<MemberDto> = members
         .into_iter()
         .map(|m| MemberDto {
@@ -47,7 +48,9 @@ pub fn create_member(
     }
 
     let service = app.state::<MemberAppService>();
-    let id = service.create_member(name, role, avatar)?;
+    let id = service
+        .create_member(name, role, avatar)
+        .map_err(|e| to_user_message(&e))?;
     info!("[create_member] 成员创建成功, id={}", id);
     Ok(id)
 }
@@ -76,7 +79,9 @@ pub fn update_member(
     }
 
     let service = app.state::<MemberAppService>();
-    service.update_member(id, name, role, avatar)?;
+    service
+        .update_member(id, name, role, avatar)
+        .map_err(|e| to_user_message(&e))?;
     info!("[update_member] 成员更新成功, id={}", id);
     Ok(())
 }
@@ -91,7 +96,7 @@ pub fn delete_member(app: AppHandle, id: i64) -> Result<(), String> {
     }
 
     let service = app.state::<MemberAppService>();
-    service.delete_member(id)?;
+    service.delete_member(id).map_err(|e| to_user_message(&e))?;
     info!("[delete_member] 成员删除成功, id={}", id);
     Ok(())
 }

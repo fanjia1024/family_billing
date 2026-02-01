@@ -2,6 +2,7 @@ use crate::application::statistics_app_service::StatisticsAppService;
 use crate::commands::dto::statistics::{
     CategoryDataDto, MonthlyDataDto, StatisticsDto,
 };
+use crate::domain::error::to_user_message;
 use anyhow::Result;
 use log::{debug, info};
 use tauri::AppHandle;
@@ -16,7 +17,9 @@ pub fn get_statistics(
     debug!("[get_statistics] 日期范围: start={:?}, end={:?}", start_date, end_date);
 
     let service = app.state::<StatisticsAppService>();
-    let result = service.get_statistics(start_date, end_date)?;
+    let result = service
+        .get_statistics(start_date, end_date)
+        .map_err(|e| to_user_message(&e))?;
 
     let monthly_data: Vec<MonthlyDataDto> = result
         .monthly_data

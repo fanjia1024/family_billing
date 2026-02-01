@@ -1,10 +1,15 @@
 use crate::domain::entities::bill::{Bill, BillFilters, BillImageForExport, CreateBill, UpdateBill};
+use crate::domain::error::DomainError;
 use crate::domain::ports::bill_repository::BillRepository;
 use crate::infrastructure::persistence::database;
 use crate::infrastructure::persistence::models::bill_row::BillRow;
 use log::{debug, error};
 use rusqlite::params;
 use tauri::AppHandle;
+
+fn to_persistence(e: impl std::fmt::Display) -> DomainError {
+    DomainError::PersistenceError(e.to_string())
+}
 
 fn row_to_bill(row: &BillRow) -> Bill {
     let bill_month = row.bill_month.clone().or_else(|| {
@@ -39,10 +44,10 @@ impl SqliteBillRepository {
 }
 
 impl BillRepository for SqliteBillRepository {
-    fn list_with_filters(&self, filters: Option<BillFilters>) -> Result<Vec<Bill>, String> {
+    fn list_with_filters(&self, filters: Option<BillFilters>) -> Result<Vec<Bill>, DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteBillRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let mut query = "SELECT id, member_id, category_id, type, amount, description, source, bill_date, bill_month, created_at FROM bill WHERE 1=1".to_string();
@@ -71,7 +76,7 @@ impl BillRepository for SqliteBillRepository {
 
         let mut stmt = conn.prepare(&query).map_err(|e| {
             error!("[SqliteBillRepository] SQL准备失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let params: Vec<&dyn rusqlite::ToSql> = query_params.iter().map(|p| p.as_ref()).collect();
@@ -93,21 +98,21 @@ impl BillRepository for SqliteBillRepository {
             })
             .map_err(|e| {
                 error!("[SqliteBillRepository] 查询执行失败: {}", e);
-                e.to_string()
+                to_persistence(e)
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 error!("[SqliteBillRepository] 结果解析失败: {}", e);
-                e.to_string()
+                to_persistence(e)
             })?;
 
         Ok(rows.iter().map(row_to_bill).collect())
     }
 
-    fn create(&self, bill: &CreateBill) -> Result<i64, String> {
+    fn create(&self, bill: &CreateBill) -> Result<i64, DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteBillRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         debug!("[SqliteBillRepository] 执行INSERT bill");
@@ -126,16 +131,16 @@ impl BillRepository for SqliteBillRepository {
         )
         .map_err(|e| {
             error!("[SqliteBillRepository] INSERT执行失败: {}", e);
-            format!("创建账单失败: {}", e)
+            to_persistence(e)
         })?;
 
         Ok(conn.last_insert_rowid())
     }
 
-    fn update(&self, id: i64, bill: &UpdateBill) -> Result<(), String> {
+    fn update(&self, id: i64, bill: &UpdateBill) -> Result<(), DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteBillRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let mut updates = Vec::new();
@@ -180,27 +185,27 @@ impl BillRepository for SqliteBillRepository {
         let params: Vec<&dyn rusqlite::ToSql> = query_params.iter().map(|p| p.as_ref()).collect();
         conn.execute(&query, &params[..]).map_err(|e| {
             error!("[SqliteBillRepository] UPDATE执行失败: {}", e);
-            format!("更新账单失败: {}", e)
+            to_persistence(e)
         })?;
 
         Ok(())
     }
 
-    fn delete(&self, id: i64) -> Result<(), String> {
+    fn delete(&self, id: i64) -> Result<(), DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteBillRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let affected = conn
             .execute("DELETE FROM bill WHERE id = ?1", params![id])
             .map_err(|e| {
                 error!("[SqliteBillRepository] DELETE执行失败: {}", e);
-                format!("删除账单失败: {}", e)
+                to_persistence(e)
             })?;
 
         if affected == 0 {
-            return Err("账单不存在".to_string());
+            return Err(DomainError::NotFound("账单不存在".to_string()));
         }
 
         Ok(())
@@ -211,10 +216,10 @@ impl BillRepository for SqliteBillRepository {
         bill_id: i64,
         image_path: &str,
         ocr_raw_text: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteBillRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         conn.execute(
@@ -223,7 +228,7 @@ impl BillRepository for SqliteBillRepository {
         )
         .map_err(|e| {
             error!("[SqliteBillRepository] 图片记录INSERT失败: {}", e);
-            format!("保存图片记录失败: {}", e)
+            to_persistence(e)
         })?;
 
         Ok(())
@@ -234,15 +239,15 @@ impl BillRepository for SqliteBillRepository {
         bill: &CreateBill,
         image_path: &str,
         ocr_raw_text: &str,
-    ) -> Result<i64, String> {
+    ) -> Result<i64, DomainError> {
         let mut conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteBillRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let tx = conn.transaction().map_err(|e| {
             error!("[SqliteBillRepository] 开启事务失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         tx.execute(
@@ -260,7 +265,7 @@ impl BillRepository for SqliteBillRepository {
         )
         .map_err(|e| {
             error!("[SqliteBillRepository] INSERT bill 失败: {}", e);
-            format!("创建账单失败: {}", e)
+            to_persistence(e)
         })?;
 
         let bill_id = tx.last_insert_rowid();
@@ -271,28 +276,28 @@ impl BillRepository for SqliteBillRepository {
         )
         .map_err(|e| {
             error!("[SqliteBillRepository] INSERT bill_image 失败: {}", e);
-            format!("保存图片记录失败: {}", e)
+            to_persistence(e)
         })?;
 
         tx.commit().map_err(|e| {
             error!("[SqliteBillRepository] 提交事务失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         Ok(bill_id)
     }
 
-    fn list_bill_images(&self) -> Result<Vec<BillImageForExport>, String> {
+    fn list_bill_images(&self) -> Result<Vec<BillImageForExport>, DomainError> {
         let conn = database::get_connection(&self.app).map_err(|e| {
             error!("[SqliteBillRepository] 数据库连接失败: {}", e);
-            e.to_string()
+            to_persistence(e)
         })?;
 
         let rows = conn
             .prepare("SELECT bill_id, image_path, ocr_raw_text, created_at FROM bill_image")
             .map_err(|e| {
                 error!("[SqliteBillRepository] SQL准备失败 (bill_image): {}", e);
-                e.to_string()
+                to_persistence(e)
             })?
             .query_map([], |row| {
                 Ok(BillImageForExport {
@@ -304,12 +309,12 @@ impl BillRepository for SqliteBillRepository {
             })
             .map_err(|e| {
                 error!("[SqliteBillRepository] 查询bill_image失败: {}", e);
-                e.to_string()
+                to_persistence(e)
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 error!("[SqliteBillRepository] 解析bill_image失败: {}", e);
-                e.to_string()
+                to_persistence(e)
             })?;
 
         Ok(rows)

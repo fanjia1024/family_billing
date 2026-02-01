@@ -47,10 +47,9 @@ pub fn ocr_recognize(app: AppHandle, image_path: String) -> Result<OcrResult, St
     }
 
     let service = app.state::<BillAppService>();
-    let result = service.recognize_image(&image_path).map_err(|e| {
-        error!("[ocr_recognize] OCR识别失败: {}", e);
-        format!("OCR识别失败: {}", e)
-    })?;
+    let result = service
+        .recognize_image(&image_path)
+        .map_err(|e| to_user_message(&e))?;
 
     info!(
         "[ocr_recognize] OCR识别成功: type={}, amount={}, date={}",
@@ -80,10 +79,9 @@ pub fn ocr_recognize_batch(app: AppHandle, image_path: String) -> Result<OcrBatc
     }
 
     let service = app.state::<BillAppService>();
-    let result = service.recognize_bill_details(&image_path).map_err(|e| {
-        error!("[ocr_recognize_batch] OCR批量识别失败: {}", e);
-        format!("OCR识别失败: {}", e)
-    })?;
+    let result = service
+        .recognize_bill_details(&image_path)
+        .map_err(|e| to_user_message(&e))?;
 
     let items: Vec<OcrBillItem> = result
         .items
@@ -134,7 +132,9 @@ pub fn save_bill_with_image(
     .map_err(|e| to_user_message(&e))?;
 
     let service = app.state::<BillAppService>();
-    let bill_id = service.save_bill_with_ocr(domain_bill, &image_path)?;
+    let bill_id = service
+        .save_bill_with_ocr(domain_bill, &image_path)
+        .map_err(|e| to_user_message(&e))?;
 
     info!("[save_bill_with_image] 账单和图片保存完成, bill_id={}", bill_id);
     Ok(bill_id)
